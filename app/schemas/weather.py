@@ -43,6 +43,10 @@ class WeatherFacts(BaseModel):
         default=None,
         description="WMO weather interpretation code"
     )
+    visibility_km: Optional[float] = Field(
+        default=None,
+        description="Horizontal visibility in kilometers"
+    )
     target_period: str = Field(
         default="current",
         description="Resolved time period for the weather snapshot, e.g. current, morning, evening"
