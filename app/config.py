@@ -1,0 +1,48 @@
+from typing import Literal
+from pydantic import Field
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class Settings(BaseSettings):
+    """Application configuration loaded from environment variables or .env file."""
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore"
+    )
+
+    # Server settings
+    HOST: str = Field(default="0.0.0.0", description="FastAPI bind host")
+    PORT: int = Field(default=8000, description="FastAPI bind port")
+    ENVIRONMENT: Literal["development", "production", "test"] = Field(
+        default="development",
+        description="Deployment environment"
+    )
+    LOG_LEVEL: str = Field(default="INFO", description="Application logging level")
+
+    # LLM Settings
+    LLM_PROVIDER: str = Field(default="openai", description="Configurable LLM provider")
+    LLM_API_KEY: str = Field(default="", description="API key for LLM provider")
+    LLM_MODEL: str = Field(default="gpt-4o-mini", description="LLM model identifier")
+    LLM_BASE_URL: str = Field(default="https://api.openai.com/v1", description="LLM API base URL")
+    LLM_TIMEOUT_SECONDS: float = Field(default=15.0, description="LLM request timeout in seconds")
+
+    # Open-Meteo Settings (No API key needed)
+    GEOCODING_BASE_URL: str = Field(
+        default="https://geocoding-api.open-meteo.com/v1/search",
+        description="Open-Meteo Geocoding API endpoint"
+    )
+    FORECAST_BASE_URL: str = Field(
+        default="https://api.open-meteo.com/v1/forecast",
+        description="Open-Meteo Forecast API endpoint"
+    )
+    OPEN_METEO_TIMEOUT_SECONDS: float = Field(
+        default=8.0,
+        description="Open-Meteo HTTP request timeout"
+    )
+
+    # Policies directory path
+    SOPS_DIR: str = Field(default="sops", description="Path to externalized YAML SOP definitions")
+
+
+settings = Settings()
