@@ -1,0 +1,81 @@
+# Vulnerable Groups Standard Operating Procedures
+- id: SOP-HEAT-CHILD-001
+  name: High Heat and Children Outdoor Exposure
+  version: "1.0"
+  category: vulnerable_groups
+  severity: HIGH
+  priority: 85
+  description: Children heat up faster than adults and are susceptible to rapid thermoregulatory failure.
+  conditions:
+    all:
+      - field: target_group
+        operator: equals
+        value: child
+      - field: temperature_c
+        operator: greater_than_or_equal
+        value: 35.0
+  required_weather_fields:
+    - temperature_c
+  advice:
+    recommendation: not_recommended
+    title: Extended outdoor activities for children are not recommended in high heat
+    guidance:
+      - Avoid prolonged playground, park, or sports activity during peak heat.
+      - Ensure continuous hydration with cool water and frequent indoor shaded breaks.
+      - Never leave children inside enclosed or unventilated vehicles.
+    rationale: Temperatures at or above 35°C present elevated clinical risk of pediatric heat distress.
+
+- id: SOP-HEAT-ELDERLY-001
+  name: High Heat and Elderly Outdoor Exposure
+  version: "1.0"
+  category: vulnerable_groups
+  severity: HIGH
+  priority: 85
+  description: Older adults have reduced heat dissipation capability and higher susceptibility to heat stroke.
+  conditions:
+    all:
+      - field: target_group
+        operator: equals
+        value: elderly
+      - field: temperature_c
+        operator: greater_than_or_equal
+        value: 35.0
+  required_weather_fields:
+    - temperature_c
+  advice:
+    recommendation: not_recommended
+    title: Outdoor activity for elderly individuals is not recommended in extreme heat
+    guidance:
+      - Avoid direct outdoor exposure, walks, or physical chores during hot periods.
+      - Remain in cool, well-ventilated or air-conditioned environments.
+      - Keep drinking water regularly even in the absence of acute thirst.
+    rationale: Seniors face severe cardiovascular and renal stress under ambient temperatures of 35°C or higher.
+
+- id: SOP-RAIN-CHILD-PARK-001
+  name: Rain and Children at Outdoor Playgrounds/Parks
+  version: "1.0"
+  category: vulnerable_groups
+  severity: MEDIUM
+  priority: 70
+  description: Wet playground equipment and active rain make outdoor park visits unsafe and impractical.
+  conditions:
+    all:
+      - field: target_group
+        operator: equals
+        value: child
+      - field: activity
+        operator: equals
+        value: park
+      - field: precipitation_probability
+        operator: greater_than_or_equal
+        value: 60
+  required_weather_fields:
+    - precipitation_probability
+  advice:
+    recommendation: caution
+    title: Outdoor park visits with children may be unsuitable due to rain
+    guidance:
+      - Outdoor play structures will be slippery and potentially hazardous.
+      - Consider postponing the park visit or choosing an indoor recreation facility.
+      - Bring waterproof rain gear if outdoor transit is necessary.
+    rationale: Precipitation probability at or above 60% indicates a high likelihood of rain wetting outdoor play structures.

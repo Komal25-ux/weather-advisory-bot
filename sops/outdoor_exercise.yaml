@@ -1,0 +1,107 @@
+# Outdoor Exercise Standard Operating Procedures
+- id: SOP-CYCLING-WIND-001
+  name: Strong Wind and Cycling
+  version: "1.0"
+  category: outdoor_exercise
+  severity: HIGH
+  priority: 80
+  description: Strong sustained winds create significant balance and stability hazards for cyclists.
+  conditions:
+    all:
+      - field: activity
+        operator: equals
+        value: cycling
+      - field: wind_speed_kmh
+        operator: greater_than_or_equal
+        value: 40.0
+  required_weather_fields:
+    - wind_speed_kmh
+  advice:
+    recommendation: not_recommended
+    title: Cycling is not recommended due to high winds
+    guidance:
+      - Avoid cycling outdoors in these windy conditions.
+      - Strong crosswinds can severely compromise steering and bike control.
+      - Consider postponing your ride or opting for an indoor trainer workout.
+    rationale: Sustained winds at or above 40 km/h present severe handling hazards for bicycles.
+
+- id: SOP-UV-EXERCISE-001
+  name: High UV Index and Outdoor Exercise
+  version: "1.0"
+  category: outdoor_exercise
+  severity: MEDIUM
+  priority: 60
+  description: High ultraviolet radiation poses sunburn and heat illness risks during daytime exercise.
+  conditions:
+    all:
+      - field: intent_category
+        operator: equals
+        value: outdoor_exercise
+      - field: uv_index
+        operator: greater_than_or_equal
+        value: 8.0
+      - field: is_daytime
+        operator: equals
+        value: true
+  required_weather_fields:
+    - uv_index
+  advice:
+    recommendation: caution
+    title: Extreme UV levels require sun protection and schedule adjustment
+    guidance:
+      - Avoid prolonged, unprotected outdoor exertion during peak sun hours.
+      - Apply broad-spectrum SPF 30+ sunscreen and wear UV-blocking clothing and eyewear.
+      - Prefer scheduling workouts during early morning or late evening hours.
+    rationale: UV index of 8.0 or above causes rapid skin damage and accelerates dehydration during physical exertion.
+
+- id: SOP-RAIN-EXERCISE-001
+  name: Heavy Precipitation and Outdoor Exercise
+  version: "1.0"
+  category: outdoor_exercise
+  severity: HIGH
+  priority: 85
+  description: Heavy rainfall leads to slippery surfaces, reduced visibility, and hypothermia risks.
+  conditions:
+    all:
+      - field: intent_category
+        operator: equals
+        value: outdoor_exercise
+      - field: precipitation_mm
+        operator: greater_than_or_equal
+        value: 5.0
+  required_weather_fields:
+    - precipitation_mm
+  advice:
+    recommendation: not_recommended
+    title: Outdoor exercise is not recommended due to heavy rain
+    guidance:
+      - Postpone outdoor workouts until precipitation subsides.
+      - Wet surfaces dramatically increase slip, fall, and road accident hazards.
+      - Shift to an indoor exercise routine.
+    rationale: Rainfall measuring 5.0 mm or more severely degrades road friction and outdoor safety.
+
+- id: SOP-HEAT-EXERCISE-001
+  name: High Heat and Strenuous Outdoor Exercise
+  version: "1.0"
+  category: outdoor_exercise
+  severity: HIGH
+  priority: 80
+  description: Extreme ambient temperatures pose severe heat stroke and dehydration risks.
+  conditions:
+    all:
+      - field: intent_category
+        operator: equals
+        value: outdoor_exercise
+      - field: temperature_c
+        operator: greater_than_or_equal
+        value: 38.0
+  required_weather_fields:
+    - temperature_c
+  advice:
+    recommendation: not_recommended
+    title: Strenuous outdoor exercise is not recommended during extreme heat
+    guidance:
+      - Avoid strenuous outdoor physical exertion during the hottest period of the day.
+      - Move workouts to early morning or to an air-conditioned indoor facility.
+      - Maintain continuous electrolyte and fluid hydration.
+    rationale: Temperatures at or above 38°C combined with metabolic heat generation can rapidly trigger heat exhaustion or heat stroke.

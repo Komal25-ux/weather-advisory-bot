@@ -1,0 +1,97 @@
+# Recreation and General Outdoor Standard Operating Procedures
+- id: SOP-GUST-OUTDOOR-001
+  name: Severe Wind Gusts and General Outdoor Activity
+  version: "1.0"
+  category: recreation
+  severity: HIGH
+  priority: 90
+  description: Severe wind gusts create sudden projectile and structural impact hazards across all outdoor activities.
+  conditions:
+    all:
+      - field: wind_gusts_kmh
+        operator: greater_than_or_equal
+        value: 60.0
+  required_weather_fields:
+    - wind_gusts_kmh
+  advice:
+    recommendation: not_recommended
+    title: Outdoor activities are not recommended due to severe wind gusts
+    guidance:
+      - Avoid open, exposed outdoor activities and open terrain.
+      - Beware of flying debris, dislodged tree branches, and unsecured structures.
+      - Postpone outdoor gatherings until gusts fall below hazardous levels.
+    rationale: Wind gusts of 60.0 km/h or above create severe localized physical hazards regardless of the specific activity.
+
+- id: SOP-PICNIC-CONDITIONS-001
+  name: Suboptimal Conditions for Outdoor Picnic
+  version: "1.0"
+  category: recreation
+  severity: MEDIUM
+  priority: 65
+  description: Multi-factor evaluation of picnic comfort and feasibility against rain, high wind, and extreme UV.
+  conditions:
+    all:
+      - field: activity
+        operator: equals
+        value: picnic
+    any:
+      - field: precipitation_probability
+        operator: greater_than_or_equal
+        value: 60
+      - field: precipitation_mm
+        operator: greater_than
+        value: 0.0
+      - field: wind_speed_kmh
+        operator: greater_than_or_equal
+        value: 30.0
+      - field: uv_index
+        operator: greater_than_or_equal
+        value: 8.0
+  required_weather_fields:
+    - precipitation_probability
+    - precipitation_mm
+    - wind_speed_kmh
+    - uv_index
+  advice:
+    recommendation: caution
+    title: Conditions are suboptimal for an outdoor picnic
+    guidance:
+      - One or more adverse environmental conditions make picnicking uncomfortable or impractical.
+      - Look into covered pavilion options or prepare indoor alternatives.
+      - Check real-time radar before laying out picnic blankets and food.
+    rationale: Rain, wind speeds of 30 km/h+, or extreme UV degrade picnic feasibility.
+
+- id: SOP-FAVORABLE-OUTDOOR-001
+  name: Favorable Low-Risk Outdoor Conditions
+  version: "1.0"
+  category: recreation
+  severity: LOW
+  priority: 20
+  description: Ambient conditions fall within safe, comfortable thresholds for general outdoor recreation.
+  conditions:
+    all:
+      - field: precipitation_probability
+        operator: less_than
+        value: 30
+      - field: wind_speed_kmh
+        operator: less_than
+        value: 25.0
+      - field: uv_index
+        operator: less_than
+        value: 8.0
+      - field: temperature_c
+        operator: between
+        value: [15.0, 32.0]
+  required_weather_fields:
+    - precipitation_probability
+    - wind_speed_kmh
+    - uv_index
+    - temperature_c
+  advice:
+    recommendation: recommended
+    title: Conditions appear broadly favorable for outdoor activities
+    guidance:
+      - Weather parameters are within comfortable, low-risk thresholds under this policy.
+      - Standard safety awareness and hydration are always recommended.
+      - Note that weather conditions can change quickly; verify local conditions.
+    rationale: Low precipitation probability, moderate winds, and comfortable temperatures represent favorable conditions.

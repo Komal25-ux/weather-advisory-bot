@@ -6,6 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
 from app.schemas.api import HealthResponse, ChatRequest, ChatResponse
+from app.policies.loader import load_sops_from_directory
 
 logging.basicConfig(
     level=settings.LOG_LEVEL,
@@ -18,6 +19,13 @@ logger = logging.getLogger("weather-advisory-bot")
 async def lifespan(app: FastAPI):
     logger.info("Starting Weather-Advisory Support Bot service...")
     logger.info(f"Environment: {settings.ENVIRONMENT}, LLM Model: {settings.LLM_MODEL}")
+    try:
+        app.state.sops = load_sops_from_directory(settings.SOPS_DIR)
+        logger.info(f"Loaded {len(app.state.sops)} SOPs into application state.")
+    except Exception as e:
+        logger.error(f"Failed to load SOP policies during startup: {e}")
+        app.state.sops = []
+        raise
     yield
     logger.info("Shutting down Weather-Advisory Support Bot service...")
 
@@ -41,10 +49,11 @@ app.add_middleware(
 
 @app.get("/health", response_model=HealthResponse, tags=["Monitoring"])
 async def health_check() -> HealthResponse:
-    """System health and readiness check."""
+    """System health and readiness check reporting loaded SOP count."""
+    loaded_count = len(getattr(app.state, "sops", []))
     return HealthResponse(
         status="ok",
-        loaded_sops_count=0,
+        loaded_sops_count=loaded_count,
         version="1.0.0"
     )
 

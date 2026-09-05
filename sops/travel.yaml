@@ -1,0 +1,56 @@
+# Travel and Commuting Standard Operating Procedures
+- id: SOP-RAIN-TRAVEL-001
+  name: High Precipitation Probability and Travel Disruption
+  version: "1.0"
+  category: travel
+  severity: MEDIUM
+  priority: 50
+  description: High chances of rain can cause transit delays, slippery roadways, and reduced visibility.
+  conditions:
+    all:
+      - field: intent_category
+        operator: equals
+        value: travel
+      - field: precipitation_probability
+        operator: greater_than_or_equal
+        value: 70
+  required_weather_fields:
+    - precipitation_probability
+  advice:
+    recommendation: caution
+    title: Rain-related travel disruptions are possible
+    guidance:
+      - Travel may be affected by rain, wet roads, and reduced transit speeds.
+      - Allow extra travel time for your journey.
+      - Check local traffic and transit service alerts before departing.
+    rationale: Precipitation probabilities of 70% or higher strongly indicate adverse commuting conditions.
+
+- id: SOP-WIND-TWOWHEELER-001
+  name: Strong Wind and Two-Wheeler Travel
+  version: "1.0"
+  category: travel
+  severity: HIGH
+  priority: 85
+  description: Strong wind gusts compromise two-wheeler stability on highways and open bridges.
+  conditions:
+    all:
+      - field: activity
+        operator: in
+        value:
+          - two_wheeler
+          - scooter
+          - motorbike
+          - motorcycle
+      - field: wind_speed_kmh
+        operator: greater_than_or_equal
+        value: 40.0
+  required_weather_fields:
+    - wind_speed_kmh
+  advice:
+    recommendation: not_recommended
+    title: Two-wheeler travel is not recommended under high winds
+    guidance:
+      - Avoid two-wheeler or motorcycle commuting under current wind conditions.
+      - Strong gusts on elevated bridges and open roads can cause sudden lane drifting.
+      - Opt for four-wheeler or public transit alternatives if travel is unavoidable.
+    rationale: Winds at or exceeding 40 km/h present critical balance hazards for motorized and non-motorized two-wheelers.

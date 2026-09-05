@@ -1,0 +1,23 @@
+# Visibility Hazards Standard Operating Procedures
+- id: SOP-FOG-VISIBILITY-001
+  name: Dense Fog Low Visibility Warning
+  version: "1.0"
+  category: travel
+  severity: HIGH
+  priority: 88
+  description: Dense fog with visibility under 1.0 km creates extreme collision hazards for transit and outdoor movement.
+  conditions:
+    all:
+      - field: visibility_km
+        operator: less_than
+        value: 1.0
+  required_weather_fields:
+    - visibility_km
+  advice:
+    recommendation: not_recommended
+    title: Outdoor travel is not recommended due to dense fog
+    guidance:
+      - Delay non-essential travel and outdoor movement until fog lifts.
+      - If movement is mandatory, use low-beam headlights and high-visibility reflective apparel.
+      - Maintain increased following distance on roadways.
+    rationale: Visual recognition and braking distance are severely compromised when horizontal visibility drops below 1.0 km.
