@@ -152,6 +152,10 @@ async def fetch_weather_facts(
         "hourly": (
             "temperature_2m,relative_humidity_2m,precipitation,precipitation_probability,"
             "wind_speed_10m,wind_gusts_10m,uv_index,cloud_cover,weather_code,visibility,is_day"
+        ),
+        "daily": (
+            "temperature_2m_max,temperature_2m_min,precipitation_sum,"
+            "precipitation_probability_max,wind_speed_10m_max,wind_gusts_10m_max,uv_index_max"
         )
     }
 
