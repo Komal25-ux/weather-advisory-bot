@@ -15,6 +15,8 @@ from app.services.weather import (
 )
 from app.policies.loader import load_sops_from_directory
 from app.policies.matcher import match_candidate_sops
+from app.policies.models import CandidateSOP
+from app.policies.evaluator import select_primary_decision
 
 logger = logging.getLogger("weather-advisory-bot.graph.nodes")
 
@@ -171,20 +173,50 @@ async def match_sops_node(state: WeatherState) -> Dict[str, Any]:
 
 async def select_decision_node(state: WeatherState) -> Dict[str, Any]:
     """
-    Node 5: State contract placeholder for Iteration 6.
-    Establishes state contract without premature safety logic.
+    Node 5: Deterministic Policy Evaluator.
+    Resolves primary policy using strictly deterministic conflict resolution:
+    Severity (CRITICAL > HIGH > MEDIUM > LOW) -> Priority (desc) -> SOP ID (asc).
+    The LLM has zero authority over this decision.
     """
-    candidates = state.get("candidate_sops", [])
-    if candidates:
-        top = candidates[0]
-        return {
-            "selected_sop": top,
-            "decision_severity": top.get("severity", "LOW"),
-            "decision_recommendation": "caution",
-            "matched_reasons": top.get("matched_conditions", []),
-            "decision_trace": f"Matched candidate {top.get('sop_id')}"
+    candidates_raw = state.get("candidate_sops", [])
+    if not candidates_raw:
+        return {}
+
+    candidate_objs = [CandidateSOP.model_validate(c) for c in candidates_raw]
+    sops = _get_sops()
+
+    decision = select_primary_decision(candidate_objs, sops)
+    if not decision:
+        return {}
+
+    selected_sop_dict = {
+        "sop_id": decision.sop_id,
+        "name": decision.sop_name,
+        "severity": decision.severity,
+        "priority": decision.priority,
+        "recommendation": decision.recommendation,
+        "guidance": decision.guidance,
+        "rationale": decision.rationale,
+        "matched_conditions": [c.model_dump() for c in decision.matched_conditions],
+        "applicable_sop_ids": decision.applicable_sop_ids,
+        "decision_trace": decision.decision_trace
+    }
+
+    return {
+        "selected_sop": selected_sop_dict,
+        "decision_severity": decision.severity,
+        "decision_recommendation": decision.recommendation,
+        "matched_reasons": [c.model_dump() for c in decision.matched_conditions],
+        "decision_trace": decision.decision_trace,
+        "trace": {
+            **state.get("trace", {}),
+            "selected_sop_id": decision.sop_id,
+            "decision_severity": decision.severity,
+            "decision_recommendation": decision.recommendation,
+            "applicable_sop_ids": decision.applicable_sop_ids,
+            "decision_trace": decision.decision_trace,
         }
-    return {}
+    }
 
 
 async def generate_response_node(state: WeatherState) -> Dict[str, Any]:

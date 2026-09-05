@@ -67,6 +67,7 @@ def select_primary_decision(
         recommendation=full_sop.advice.recommendation,
         priority=full_sop.priority,
         matched_conditions=winning_candidate.matched_conditions,
+        applicable_sop_ids=[c.sop_id for c in candidate_sops],
         guidance=full_sop.advice.guidance,
         rationale=full_sop.advice.rationale,
         decision_trace=trace_str

@@ -98,7 +98,11 @@ class DeterministicDecision(BaseModel):
     severity: SeverityLevel
     recommendation: RecommendationType
     priority: int
-    matched_conditions: List[MatchedCondition]
-    guidance: List[str]
-    rationale: str
-    decision_trace: str
+    matched_conditions: List[MatchedCondition] = Field(default_factory=list)
+    applicable_sop_ids: List[str] = Field(
+        default_factory=list,
+        description="All matching SOP candidate IDs evaluated before conflict resolution"
+    )
+    guidance: List[str] = Field(default_factory=list)
+    rationale: str = ""
+    decision_trace: str = ""
