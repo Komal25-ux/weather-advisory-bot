@@ -27,3 +27,6 @@ htmlcov/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Documentation (Local WIP)
+README.md
