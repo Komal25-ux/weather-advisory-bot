@@ -70,6 +70,16 @@
   description: Ambient conditions fall within safe, comfortable thresholds for general outdoor recreation.
   conditions:
     all:
+      - field: activity
+        operator: in
+        value:
+          - cycling
+          - running
+          - walking
+          - picnic
+          - park
+          - commute
+          - two_wheeler
       - field: precipitation_probability
         operator: less_than
         value: 30
