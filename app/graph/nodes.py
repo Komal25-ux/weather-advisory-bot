@@ -152,9 +152,13 @@ async def parse_intent_node(state: WeatherState) -> Dict[str, Any]:
     except Exception as e:
         logger.error(f"Intent extraction node error: {e}")
         return {
-            "is_clarification_needed": True,
+            "is_clarification_needed": False,
             "error_type": "INTENT_FAILURE",
-            "error_message": str(e)
+            "error_message": str(e),
+            "trace": {
+                **state.get("trace", {}),
+                "intent_error": str(e)
+            }
         }
 
 
@@ -380,11 +384,17 @@ async def handle_intent_clarification_node(state: WeatherState) -> Dict[str, Any
 
 
 async def handle_failure_node(state: WeatherState) -> Dict[str, Any]:
-    """Failure Branch B: Honest failure handling for location or weather lookup."""
+    """Failure Branch B: Honest failure handling for LLM outage, location, or weather lookup."""
     err_type = state.get("error_type", "WEATHER_FAILURE")
     loc = state.get("resolved_location_name") or state.get("location_name") or "that location"
 
-    if err_type == "LOCATION_FAILURE":
+    if err_type == "INTENT_FAILURE":
+        msg = (
+            "I couldn't process this request because the language-model service is temporarily unavailable. "
+            "I can't safely evaluate the request without completing intent extraction. Please try again."
+        )
+        resp_type = "INTENT_FAILURE"
+    elif err_type == "LOCATION_FAILURE":
         msg = f"I couldn't resolve that location, so I can't retrieve the weather needed for this recommendation."
         resp_type = "LOCATION_FAILURE"
     else:

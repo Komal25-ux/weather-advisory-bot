@@ -46,11 +46,12 @@ def build_weather_graph(checkpointer: Optional[Any] = None) -> Any:
     # 2. Add entrypoint
     builder.add_edge(START, "parse_intent")
 
-    # 3. Add conditional edge 1: Intent -> Clarification OR Location Resolution
+    # 3. Add conditional edge 1: Intent -> Failure OR Clarification OR Location Resolution
     builder.add_conditional_edges(
         "parse_intent",
         route_after_intent,
         {
+            "handle_failure": "handle_failure",
             "handle_intent_clarification": "handle_intent_clarification",
             "resolve_location": "resolve_location"
         }

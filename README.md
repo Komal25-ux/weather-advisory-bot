@@ -120,21 +120,24 @@ When multiple SOPs match simultaneously, the decision engine in `app/policies/ev
 
 ---
 
-## 7. Gemini LLM Integration
+## 7. Gemini LLM Integration & Model Rotation
 
 The bot utilizes Google's official OpenAI-compatible endpoint:
 - **Base URL**: `https://generativelanguage.googleapis.com/v1beta/openai/`
-- **Model**: `gemini-3.6-flash` (or `gemini-flash-latest`)
-- **Quota Resilience**: If the Gemini API rate limit or quota is exhausted (HTTP 429), the bot automatically falls back to its deterministic response generator (`format_deterministic_advisory`), guaranteeing continuous uptime and safe operation.
+- **Primary Model**: `gemini-3.6-flash`
+- **Fallback Models**: `gemini-3.5-flash`, `gemini-3.5-flash-lite`
+- **Model Rotation**: On retryable provider availability failures (HTTP 429, HTTP 408, HTTP 5xx, timeouts, or quota limits), the service automatically rotates through configured fallback models (`LLM_FALLBACK_MODELS`). Model fallback improves operational resilience when a specific model is temporarily rate-limited or unavailable (though it does not guarantee quota availability if project-level limits are reached).
+- **Deterministic Response Fallback**: If grounded response generation fails across all candidate models, the bot automatically falls back to its deterministic response generator (`format_deterministic_advisory`), guaranteeing continuous uptime and zero safety-recommendation drift.
 
 ---
 
 ## 8. Failure & Edge Case Handling
 
-1. **Weather API Failure**: Returns HTTP 200 with `response_type: WEATHER_FAILURE`. Informs user that weather data could not be fetched; does not guess or recommend.
-2. **Location Failure**: Returns `response_type: LOCATION_FAILURE` when city name is not recognized by geocoder.
-3. **Missing Metrics**: If a specific metric is `UNAVAILABLE` in the forecast, SOP conditions referencing it do not match. Missing values are never assumed to be zero.
-4. **No Matching SOP**: Returns `response_type: NO_SOP`. Clearly states that no configured safety policy applies to the scenario (avoids asserting "conditions are safe").
+1. **LLM Provider Failure**: Returns HTTP 200 with `response_type: INTENT_FAILURE` if intent extraction cannot complete across all fallback models. Honestly communicates language-model unavailability rather than mischaracterizing it as user ambiguity.
+2. **Weather API Failure**: Returns HTTP 200 with `response_type: WEATHER_FAILURE`. Informs user that weather data could not be fetched; does not guess or recommend.
+3. **Location Failure**: Returns `response_type: LOCATION_FAILURE` when city name is not recognized by geocoder.
+4. **Missing Metrics**: If a specific metric is `UNAVAILABLE` in the forecast, SOP conditions referencing it do not match. Missing values are never assumed to be zero.
+5. **No Matching SOP**: Returns `response_type: NO_SOP`. Clearly states that no configured safety policy applies to the scenario (avoids asserting "conditions are safe").
 
 ---
 
@@ -191,6 +194,7 @@ LLM_PROVIDER=gemini
 LLM_API_KEY=your_actual_gemini_api_key_here
 # (or GEMINI_API_KEY=your_actual_gemini_api_key_here)
 LLM_MODEL=gemini-3.6-flash
+LLM_FALLBACK_MODELS=gemini-3.5-flash,gemini-3.5-flash-lite
 LLM_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai/
 ```
 *(Note: `.env` is git-ignored and must never be committed).*

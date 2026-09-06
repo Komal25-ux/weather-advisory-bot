@@ -198,10 +198,20 @@
         noSopBadge.className = "badge badge-nosop";
         noSopBadge.textContent = "NO APPLICABLE POLICY";
         badgeRow.appendChild(noSopBadge);
+      } else if (data.response_type === "INTENT_FAILURE") {
+        const failBadge = document.createElement("span");
+        failBadge.className = "badge badge-failure";
+        failBadge.textContent = "SERVICE UNAVAILABLE";
+        badgeRow.appendChild(failBadge);
       } else if (data.response_type === "WEATHER_FAILURE") {
         const failBadge = document.createElement("span");
         failBadge.className = "badge badge-failure";
         failBadge.textContent = "WEATHER RETRIEVAL FAILED";
+        badgeRow.appendChild(failBadge);
+      } else if (data.response_type === "LOCATION_FAILURE") {
+        const failBadge = document.createElement("span");
+        failBadge.className = "badge badge-failure";
+        failBadge.textContent = "LOCATION RESOLUTION FAILED";
         badgeRow.appendChild(failBadge);
       } else if (data.response_type === "INTENT_CLARIFICATION") {
         const clarBadge = document.createElement("span");

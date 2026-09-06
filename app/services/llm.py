@@ -53,8 +53,110 @@ Rules:
 """
 
 
-def _get_llm_runnable(custom_runnable: Optional[Any] = None) -> Any:
-    """Returns a structured-output runnable using the configured LLM provider."""
+def _is_retryable_provider_error(error: Exception) -> bool:
+    """
+    Determines if an error is a transient provider or availability failure
+    warranting model rotation (429, 408, 5xx, timeouts, connection drops, quota).
+    Non-retryable errors (401, 403, 400, validation errors, programming bugs) return False.
+    """
+    if isinstance(error, (ValidationError, IntentValidationError, TypeError, ValueError, KeyError, AttributeError)):
+        return False
+
+    # Check HTTP status code if present (OpenAI/httpx exceptions)
+    status_code = getattr(error, "status_code", None)
+    if status_code is not None:
+        if status_code in (401, 403, 400):
+            return False
+        if status_code in (408, 429) or (500 <= status_code < 600):
+            return True
+
+    error_name = type(error).__name__
+    if error_name in (
+        "RateLimitError",
+        "OpenAIRateLimitError",
+        "APITimeoutError",
+        "APIConnectionError",
+        "InternalServerError",
+        "ServiceUnavailableError",
+        "BadGatewayError",
+        "GatewayTimeoutError",
+    ):
+        return True
+
+    # Check for httpx timeout/network errors
+    try:
+        import httpx
+        if isinstance(error, (httpx.TimeoutException, httpx.NetworkError)):
+            return True
+    except ImportError:
+        pass
+
+    err_msg = str(error).lower()
+    # If explicitly unauthorized/forbidden/bad request, do not rotate
+    if any(k in err_msg for k in ("401", "unauthorized", "invalid api key", "403", "forbidden")):
+        return False
+
+    retryable_keywords = [
+        "429", "resource_exhausted", "quota", "rate limit", "rate_limit",
+        "503", "502", "500", "504", "408", "timeout", "timed out",
+        "connection", "temporarily unavailable", "service unavailable",
+        "overloaded"
+    ]
+    return any(kw in err_msg for kw in retryable_keywords)
+
+
+async def _invoke_with_model_rotation(
+    invoke_fn: Any,
+    models: Optional[List[str]] = None,
+    operation_name: str = "LLM operation",
+) -> Any:
+    """
+    Sequentially attempts an LLM operation across a chain of models.
+    Rotates only on retryable provider failures (429, 5xx, timeout, quota).
+    Stops immediately on non-retryable failures (401, 400, validation).
+    Raises LLMServiceError if all models fail.
+    """
+    candidate_models = models or settings.effective_llm_models
+    if not candidate_models:
+        candidate_models = [settings.LLM_MODEL]
+
+    last_exception = None
+
+    for idx, model in enumerate(candidate_models):
+        logger.info(f"Attempting {operation_name} with model '{model}' ({idx + 1}/{len(candidate_models)})")
+        try:
+            return await invoke_fn(model)
+        except Exception as e:
+            last_exception = e
+            if isinstance(e, (IntentValidationError, IntentExtractionError)):
+                raise
+
+            is_retryable = _is_retryable_provider_error(e)
+            has_next = (idx + 1 < len(candidate_models))
+
+            if is_retryable and has_next:
+                logger.warning(
+                    f"{operation_name} failed on model '{model}' with retryable error ({e}). "
+                    f"Rotating to next model in fallback chain..."
+                )
+                continue
+            else:
+                if not is_retryable:
+                    logger.error(
+                        f"{operation_name} encountered non-retryable error on model '{model}': {e}. "
+                        "Aborting model rotation."
+                    )
+                else:
+                    logger.error(
+                        f"{operation_name} failed on final model '{model}' ({e}). Fallback chain exhausted."
+                    )
+                raise LLMServiceError(f"{operation_name} failed: {e}") from e
+
+    raise LLMServiceError(f"{operation_name} failed across all models: {last_exception}") from last_exception
+
+
+def _get_llm_runnable(model_name: Optional[str] = None, custom_runnable: Optional[Any] = None) -> Any:
+    """Returns a structured-output runnable using the configured LLM provider and specified model."""
     if custom_runnable is not None:
         return custom_runnable
 
@@ -65,14 +167,42 @@ def _get_llm_runnable(custom_runnable: Optional[Any] = None) -> Any:
             "Please configure LLM_API_KEY (or GEMINI_API_KEY) in your environment or .env file."
         )
 
+    model = model_name or settings.LLM_MODEL
     llm = ChatOpenAI(
-        model=settings.LLM_MODEL,
+        model=model,
         api_key=api_key,
         base_url=settings.LLM_BASE_URL,
         timeout=settings.LLM_TIMEOUT_SECONDS,
+        max_retries=0,
         temperature=0.0
     )
     return llm.with_structured_output(StructuredIntent)
+
+
+async def _invoke_runnable_and_validate(runnable: Any, messages: List[Any]) -> StructuredIntent:
+    """Invokes a structured runnable and validates output conforms to StructuredIntent."""
+    if hasattr(runnable, "ainvoke"):
+        raw_result = await runnable.ainvoke(messages)
+    elif hasattr(runnable, "invoke"):
+        raw_result = runnable.invoke(messages)
+    elif callable(runnable):
+        import inspect
+        if inspect.iscoroutinefunction(runnable):
+            raw_result = await runnable(messages)
+        else:
+            raw_result = runnable(messages)
+    else:
+        raise LLMServiceError(f"Unsupported LLM runnable type: {type(runnable)}")
+
+    if isinstance(raw_result, StructuredIntent):
+        return raw_result
+    elif isinstance(raw_result, dict):
+        try:
+            return StructuredIntent.model_validate(raw_result)
+        except ValidationError as ve:
+            raise IntentValidationError(f"Structured LLM output failed schema validation: {ve}") from ve
+    else:
+        raise IntentValidationError(f"Expected StructuredIntent, got {type(raw_result)}: {raw_result}")
 
 
 async def extract_intent(
@@ -82,7 +212,8 @@ async def extract_intent(
 ) -> StructuredIntent:
     """
     Extracts structured intent from user message and chat history using LLM structured output.
-    Enforces application-level Pydantic schema validation.
+    Uses model rotation across configured fallback models on transient provider errors.
+    Bypasses model rotation when custom_runnable is provided.
     """
     cleaned_message = user_message.strip()
     if not cleaned_message:
@@ -93,7 +224,6 @@ async def extract_intent(
 
     messages = [SystemMessage(content=INTENT_EXTRACTION_SYSTEM_PROMPT)]
 
-    # Add previous turns to support follow-up context resolution
     if chat_history:
         for turn in chat_history:
             role = turn.get("role", "user")
@@ -105,38 +235,24 @@ async def extract_intent(
 
     messages.append(HumanMessage(content=cleaned_message))
 
-    runnable = _get_llm_runnable(custom_runnable)
+    # If custom_runnable is provided (e.g. unit tests), bypass model rotation directly
+    if custom_runnable is not None:
+        try:
+            return await _invoke_runnable_and_validate(custom_runnable, messages)
+        except (IntentValidationError, IntentExtractionError):
+            raise
+        except Exception as e:
+            logger.error(f"Custom runnable intent extraction failed: {e}")
+            raise LLMServiceError(f"LLM intent extraction service error: {e}") from e
 
-    try:
-        if hasattr(runnable, "ainvoke"):
-            raw_result = await runnable.ainvoke(messages)
-        elif hasattr(runnable, "invoke"):
-            raw_result = runnable.invoke(messages)
-        elif callable(runnable):
-            import inspect
-            if inspect.iscoroutinefunction(runnable):
-                raw_result = await runnable(messages)
-            else:
-                raw_result = runnable(messages)
-        else:
-            raise LLMServiceError(f"Unsupported LLM runnable type: {type(runnable)}")
+    async def _execute_model_intent(model_name: str) -> StructuredIntent:
+        runnable = _get_llm_runnable(model_name=model_name)
+        return await _invoke_runnable_and_validate(runnable, messages)
 
-        # Validate structured result
-        if isinstance(raw_result, StructuredIntent):
-            return raw_result
-        elif isinstance(raw_result, dict):
-            try:
-                return StructuredIntent.model_validate(raw_result)
-            except ValidationError as ve:
-                raise IntentValidationError(f"Structured LLM output failed schema validation: {ve}") from ve
-        else:
-            raise IntentValidationError(f"Expected StructuredIntent, got {type(raw_result)}: {raw_result}")
-
-    except (IntentValidationError, IntentExtractionError):
-        raise
-    except Exception as e:
-        logger.error(f"LLM intent extraction call failed: {e}")
-        raise LLMServiceError(f"LLM intent extraction service error: {e}") from e
+    return await _invoke_with_model_rotation(
+        _execute_model_intent,
+        operation_name="Intent extraction"
+    )
 
 
 RESPONSE_GENERATOR_SYSTEM_PROMPT = """You are an accurate, grounded advisory response verbalizer for an automated safety system.
@@ -238,26 +354,7 @@ async def generate_grounded_response(
         HumanMessage(content=prompt_content)
     ]
 
-    try:
-        if custom_runnable is not None:
-            runnable = custom_runnable
-        else:
-            api_key = settings.LLM_API_KEY.strip() if settings.LLM_API_KEY else ""
-            if not api_key:
-                logger.warning(
-                    f"LLM API key not configured for provider '{settings.LLM_PROVIDER}'. "
-                    "Employing deterministic advisory fallback."
-                )
-                return format_deterministic_advisory(payload)
-
-            runnable = ChatOpenAI(
-                model=settings.LLM_MODEL,
-                api_key=api_key,
-                base_url=settings.LLM_BASE_URL,
-                timeout=settings.LLM_TIMEOUT_SECONDS,
-                temperature=0.2
-            )
-
+    async def _invoke_grounded_runnable(runnable: Any) -> str:
         if hasattr(runnable, "ainvoke"):
             response_msg = await runnable.ainvoke(messages)
         elif hasattr(runnable, "invoke"):
@@ -271,13 +368,14 @@ async def generate_grounded_response(
         else:
             raise LLMServiceError(f"Unsupported runnable type: {type(runnable)}")
 
-        content = response_msg.content if hasattr(response_msg, "content") else str(response_msg)
+        return response_msg.content if hasattr(response_msg, "content") else str(response_msg)
 
+    def _apply_guardrails(content: str) -> str:
         # Defense-in-depth guardrail verification:
         # 1. Ensure recommendation is not inverted
         if payload.recommendation == "not_recommended":
             low_content = content.lower()
-            if "is safe" in low_content or "is recommended" in low_content and "not recommended" not in low_content:
+            if "is safe" in low_content or ("is recommended" in low_content and "not recommended" not in low_content):
                 logger.warning("LLM output violated safety recommendation. Falling back to deterministic advisory.")
                 return format_deterministic_advisory(payload)
 
@@ -287,6 +385,43 @@ async def generate_grounded_response(
 
         return content
 
+    # If custom_runnable is provided (e.g. tests), bypass model rotation directly
+    if custom_runnable is not None:
+        try:
+            content = await _invoke_grounded_runnable(custom_runnable)
+            return _apply_guardrails(content)
+        except Exception as e:
+            logger.warning(f"Custom runnable grounded response generation failed ({e}). Employing deterministic advisory fallback.")
+            return format_deterministic_advisory(payload)
+
+    api_key = settings.LLM_API_KEY.strip() if settings.LLM_API_KEY else ""
+    if not api_key:
+        logger.warning(
+            f"LLM API key not configured for provider '{settings.LLM_PROVIDER}'. "
+            "Employing deterministic advisory fallback."
+        )
+        return format_deterministic_advisory(payload)
+
+    async def _execute_grounded_for_model(model_name: str) -> str:
+        runnable = ChatOpenAI(
+            model=model_name,
+            api_key=api_key,
+            base_url=settings.LLM_BASE_URL,
+            timeout=settings.LLM_TIMEOUT_SECONDS,
+            max_retries=0,
+            temperature=0.2
+        )
+        content = await _invoke_grounded_runnable(runnable)
+        return _apply_guardrails(content)
+
+    try:
+        return await _invoke_with_model_rotation(
+            _execute_grounded_for_model,
+            operation_name="Grounded response generation"
+        )
     except Exception as e:
-        logger.warning(f"LLM grounded response generation unavailable ({e}). Employing deterministic advisory fallback.")
+        logger.warning(
+            f"LLM grounded response generation unavailable across models ({e}). "
+            "Employing deterministic advisory fallback."
+        )
         return format_deterministic_advisory(payload)

@@ -66,7 +66,8 @@ class WeatherState(TypedDict, total=False):
         "NO_SOP",
         "LOCATION_FAILURE",
         "WEATHER_FAILURE",
-        "INTENT_CLARIFICATION"
+        "INTENT_CLARIFICATION",
+        "INTENT_FAILURE"
     ]
     response: Optional[str]
     error_type: Optional[str]

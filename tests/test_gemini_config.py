@@ -23,11 +23,17 @@ from app.services.llm import (
 
 
 def test_default_gemini_settings():
-    """Verify default settings point to Gemini OpenAI-compatible endpoint."""
+    """Verify default settings point to Gemini OpenAI-compatible endpoint with fallback models."""
     with patch.dict(os.environ, {}, clear=True):
         custom_settings = Settings(_env_file=None)
         assert custom_settings.LLM_PROVIDER == "gemini"
         assert custom_settings.LLM_MODEL == "gemini-3.6-flash"
+        assert custom_settings.LLM_FALLBACK_MODELS == "gemini-3.5-flash,gemini-3.5-flash-lite"
+        assert custom_settings.effective_llm_models == [
+            "gemini-3.6-flash",
+            "gemini-3.5-flash",
+            "gemini-3.5-flash-lite"
+        ]
         assert custom_settings.LLM_BASE_URL == "https://generativelanguage.googleapis.com/v1beta/openai/"
 
 

@@ -1,4 +1,4 @@
-from typing import Literal
+from typing import Literal, List
 from pydantic import Field, AliasChoices
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -27,12 +27,27 @@ class Settings(BaseSettings):
         validation_alias=AliasChoices("LLM_API_KEY", "GEMINI_API_KEY", "OPENAI_API_KEY"),
         description="API key for LLM provider"
     )
-    LLM_MODEL: str = Field(default="gemini-3.6-flash", description="LLM model identifier")
+    LLM_MODEL: str = Field(default="gemini-3.6-flash", description="Primary LLM model identifier")
+    LLM_FALLBACK_MODELS: str = Field(
+        default="gemini-3.5-flash,gemini-3.5-flash-lite",
+        description="Comma-separated fallback models for provider resilience"
+    )
     LLM_BASE_URL: str = Field(
         default="https://generativelanguage.googleapis.com/v1beta/openai/",
         description="LLM API base URL"
     )
     LLM_TIMEOUT_SECONDS: float = Field(default=15.0, description="LLM request timeout in seconds")
+
+    @property
+    def effective_llm_models(self) -> List[str]:
+        """Constructs effective ordered list of models without duplicates."""
+        primary = self.LLM_MODEL.strip() if self.LLM_MODEL else ""
+        fallbacks = [m.strip() for m in self.LLM_FALLBACK_MODELS.split(",") if m.strip()]
+        models = [primary] if primary else []
+        for m in fallbacks:
+            if m not in models:
+                models.append(m)
+        return models
 
     # Open-Meteo Settings (No API key needed)
     GEOCODING_BASE_URL: str = Field(

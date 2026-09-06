@@ -8,9 +8,15 @@ logger = logging.getLogger("weather-advisory-bot.graph.routing")
 def route_after_intent(state: WeatherState) -> str:
     """
     Branch 1: After intent extraction.
-    Routes to handle_intent_clarification if clarification is flagged or activity/location missing.
-    Otherwise routes to resolve_location.
+    - If LLM/provider failed (error_type == 'INTENT_FAILURE'), routes to handle_failure.
+    - If genuine ambiguity or missing activity/location, routes to handle_intent_clarification.
+    - Otherwise routes to resolve_location.
     """
+    error = state.get("error_type")
+    if error == "INTENT_FAILURE":
+        logger.info("Routing -> handle_failure (intent extraction service failure)")
+        return "handle_failure"
+
     is_clarification = state.get("is_clarification_needed", False)
     has_loc = bool(state.get("location_name"))
     has_act = bool(state.get("activity"))

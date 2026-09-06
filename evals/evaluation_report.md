@@ -1,5 +1,5 @@
 # Weather-Advisory Support Bot — Evaluation Report
-**Execution Timestamp**: `2026-09-06T10:06:03.381320+00:00`  
+**Execution Timestamp**: `2026-09-06T11:12:17.878724+00:00`
 **Total Cases Evaluated**: `8`  
 **Passed**: `8/8` (100.0%)  
 **Failed**: `0`  
@@ -54,7 +54,7 @@
     "is_daytime": true,
     "retrieved_at": null
   },
-  "response_snippet": "**Cycling is not recommended in Bhopal, India (today).**\n\n- **Wind Speed**: 44.0 km/h\n- **Wind Gusts**: 52.0 km/h\n- **Temperature**: 28.0 °C\n- **Precipitation**: 0.0 mm\n- **Rain Pr..."
+  "response_snippet": "Based on the automated safety system evaluation, cycling in Bhopal, India today is **NOT recommended** under policy.\n\n### Policy and Standard Operating Procedure\n* **Primary Policy..."
 }
 ```
 
@@ -78,7 +78,7 @@
   "selected_sop_id": "SOP-WIND-TWOWHEELER-001",
   "decision_recommendation": "not_recommended",
   "decision_severity": "HIGH",
-  "response_snippet": "**Two_wheeler is not recommended in Tokyo, Japan (today).**\n\n- **Wind Speed**: 45.0 km/h\n- **Wind Gusts**: 55.0 km/h\n- **Temperature**: 18.0 °C\n- **Precipitation**: 0.0 mm\n\n**Polic..."
+  "response_snippet": "Based on the automated safety evaluation, operating a two-wheeler in Tokyo, Japan today is **NOT recommended** under policy.\n\n### Policy and Safety Standard\n* **Applicable Standard..."
 }
 ```
 
@@ -101,7 +101,7 @@
   "extracted_time": "this afternoon",
   "selected_sop_id": "SOP-CYCLING-WIND-001",
   "decision_recommendation": "not_recommended",
-  "response_snippet": "**Cycling is not recommended in London, Greater London, United Kingdom (this afternoon).**\n\n- **Wind Speed**: 42.0 km/h\n- **Wind Gusts**: 50.0 km/h\n- **Temperature**: 19.0 °C\n- **P..."
+  "response_snippet": "Based on the automated safety evaluation, cycling in London, Greater London, United Kingdom **this afternoon** is **NOT recommended** under policy.\n\n### Policy & Compliance Details..."
 }
 ```
 
@@ -126,7 +126,7 @@
   "selected_sop_id": "SOP-RAIN-CHILD-PARK-001",
   "decision_recommendation": "caution",
   "decision_severity": "MEDIUM",
-  "response_snippet": "**Caution is advised for park in Paris, France (today).**\n\n- **Wind Speed**: 14.0 km/h\n- **Temperature**: 21.0 °C\n- **Precipitation**: 2.5 mm\n- **Rain Probability**: 75 %\n\n**Policy..."
+  "response_snippet": "Based on the automated safety system evaluation for visiting a **park** in **Paris, France** for **today**, the following advisory is issued:\n\n### Safety Decision & Policy Evaluati..."
 }
 ```
 
@@ -144,7 +144,7 @@
 5. Deterministic evaluator dictates recommendation (not_recommended) and severity (HIGH) via SOP-GUST-OUTDOOR-001
 6. LLM has 0 authority over decision_recommendation`
 - **Status**: **✅ PASS**
-- **Honest Notes**: Verified unmocked live execution against Open-Meteo API. Location: Wellington, Wellington Region, New Zealand (-41.28664, 174.77557). Live Weather: wind=32.8 km/h, gusts=78.8 km/h, temp=13.9°C retrieved at 2026-09-06T10:05:59.654367+00:00. Matcher Condition Proof: field='wind_gusts_kmh', actual=78.8 (exactly matching live facts), threshold=60.0, status=PASSED. Evaluator Decision: SOP 'SOP-GUST-OUTDOOR-001' deterministically assigned 'not_recommended' (severity HIGH). LLM has zero authority over safety decision.
+- **Honest Notes**: Verified unmocked live execution against Open-Meteo API. Location: Wellington, Wellington Region, New Zealand (-41.28664, 174.77557). Live Weather: wind=30.1 km/h, gusts=67.3 km/h, temp=10.9°C retrieved at 2026-09-06T11:12:13.015682+00:00. Matcher Condition Proof: field='wind_gusts_kmh', actual=67.3 (exactly matching live facts), threshold=60.0, status=PASSED. Evaluator Decision: SOP 'SOP-GUST-OUTDOOR-001' deterministically assigned 'not_recommended' (severity HIGH). LLM has zero authority over safety decision.
 
 #### Observed State Output
 ```json
@@ -157,26 +157,26 @@
     "longitude": 174.77557
   },
   "live_weather_facts": {
-    "temperature_c": 13.9,
-    "relative_humidity_pct": 96,
-    "precipitation_mm": 0.6,
+    "temperature_c": 10.9,
+    "relative_humidity_pct": 91,
+    "precipitation_mm": 2.3,
     "precipitation_probability": 0,
-    "wind_speed_kmh": 32.8,
-    "wind_gusts_kmh": 78.8,
+    "wind_speed_kmh": 30.1,
+    "wind_gusts_kmh": 67.3,
     "uv_index": 0.0,
     "cloud_cover_pct": 100,
-    "weather_code": 80,
+    "weather_code": 82,
     "visibility_km": 47.1,
     "target_period": "today",
     "is_daytime": false,
-    "retrieved_at": "2026-09-06T10:05:59.654367+00:00"
+    "retrieved_at": "2026-09-06T11:12:13.015682+00:00"
   },
   "values_flowed_into_matcher": true,
   "matcher_condition_proof": {
     "field": "wind_gusts_kmh",
     "operator": "greater_than_or_equal",
     "threshold": 60.0,
-    "actual": 78.8,
+    "actual": 67.3,
     "result": true,
     "status": "PASSED"
   },
@@ -184,8 +184,8 @@
   "selected_sop_id": "SOP-GUST-OUTDOOR-001",
   "decision_recommendation": "not_recommended",
   "decision_severity": "HIGH",
-  "decision_trace": "wind_gusts_kmh (78.8) greater_than_or_equal 60.0",
-  "response": "**Cycling is not recommended in Wellington, Wellington Region, New Zealand (today).**\n\n- **Wind Speed**: 32.8 km/h\n- **Wind Gusts**: 78.8 km/h\n- **Temperature**: 13.9 °C\n- **Precipitation**: 0.6 mm\n- **Rain Probability**: 0 %\n- **UV Index**: 0.0\n- **Visibility**: 47.1 km\n\n**Policy Evaluation:**\n- **Primary Policy:** `SOP-GUST-OUTDOOR-001` — Severe Wind Gusts and General Outdoor Activity\n- **Severity Level:** HIGH\n\n**Guidance:**\n- Avoid open, exposed outdoor activities and open terrain.\n- Beware of flying debris, dislodged tree branches, and unsecured structures.\n- Postpone outdoor gatherings until gusts fall below hazardous levels.\n\n*Wind gusts of 60.0 km/h or above create severe localized physical hazards regardless of the specific activity.*"
+  "decision_trace": "wind_gusts_kmh (67.3) greater_than_or_equal 60.0",
+  "response": "Based on the safety evaluation and policy rules applied for **cycling** in **Wellington, Wellington Region, New Zealand** for **today**, this activity is **NOT recommended** under policy.\n\n### Policy Evaluation & Standards\n* **Primary Policy:** SOP-GUST-OUTDOOR-001 (Severe Wind Gusts and General Outdoor Activity)\n* **Severity Level:** HIGH\n* **Applicable Standards:** SOP-GUST-OUTDOOR-001\n\n*(Note: The policy evaluation matched SOP-GUST-OUTDOOR-001 as the governing standard for the current conditions).*\n\n### Weather Conditions\n* **Wind Speed:** 30.1 km/h\n* **Wind Gusts:** 67.3 km/h\n* **Temperature:** 10.9 °C\n* **Precipitation:** 2.3 mm\n* **Rain Probability:** 0 %\n* **UV Index:** 0.0\n* **Visibility:** 47.1 km\n\n### Guidance & Rationale\n* **Rationale:** Wind gusts of 60.0 km/h or above create severe localized physical hazards regardless of the specific activity (Decision trace: wind gusts of 67.3 km/h exceeded the 60.0 km/h threshold).\n* **Key Guidance:**\n  * Avoid open, exposed outdoor activities and open terrain.\n  * Beware of flying debris, dislodged tree branches, and unsecured structures.\n  * Postpone outdoor gatherings until gusts fall below hazardous levels."
 }
 ```
 
@@ -250,7 +250,7 @@
   "decision_recommendation": "not_recommended",
   "decision_severity": "HIGH",
   "authoritative_wind_kmh": 45.0,
-  "response_snippet": "**Cycling is not recommended in Chicago, Illinois, United States (today).**\n\n- **Wind Speed**: 45.0 km/h\n- **Wind Gusts**: 55.0 km/h\n- **Temperature**: 18.0 °C\n- **Precipitation**:..."
+  "response_snippet": "**Activity Advisory Assessment**\n\n* **Activity:** cycling\n* **Location:** Chicago, Illinois, United States\n* **Time Period:** today\n* **Recommendation:** **NOT RECOMMENDED**\n\nUnder..."
 }
 ```
 

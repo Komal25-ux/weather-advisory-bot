@@ -39,7 +39,8 @@ class ChatResponse(BaseModel):
         "NO_SOP",
         "LOCATION_FAILURE",
         "WEATHER_FAILURE",
-        "INTENT_CLARIFICATION"
+        "INTENT_CLARIFICATION",
+        "INTENT_FAILURE"
     ]
     response: str
     sop_id: Optional[str] = None
