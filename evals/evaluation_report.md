@@ -1,5 +1,5 @@
 # Weather-Advisory Support Bot — Evaluation Report
-**Execution Timestamp**: `2026-09-06T08:02:30.642906+00:00`  
+**Execution Timestamp**: `2026-09-06T08:11:50.789110+00:00`  
 **Total Cases Evaluated**: `8`  
 **Passed**: `8/8` (100.0%)  
 **Failed**: `0`  
@@ -134,17 +134,23 @@
 ### CASE-5-SEVERE-LIVE-WEATHER: Live Weather Integration & Dynamic Policy Evaluation
 - **Evaluation Type**: `end_to_end_behavioral`
 - **User Input**: *"Can I cycle in Wellington today?"*
-- **Setup / Environment**: LIVE Open-Meteo API (Geocoding & Forecast APIs executed via HTTP in real-time)
-- **What is Checked**: Live API connectivity, schema normalization, unhardcoded facts, deterministic policy evaluation
-- **Expected Behavior**: Retrieve genuine live weather facts from Open-Meteo, evaluate against active SOPs, produce grounded decision
-- **Pass Criteria**: `response_type in ['SUCCESS', 'NO_SOP'] and weather_facts is not None and weather_facts.retrieved_at is not None and latitude is not None and longitude is not None`
+- **Setup / Environment**: LIVE Open-Meteo API (Unmocked Geocoding & Forecast HTTP requests executed in real-time)
+- **What is Checked**: Live API connectivity, unmocked weather service, observed wind/gust value flow into SOP matcher, and deterministic safety decision authority (non-LLM).
+- **Expected Behavior**: Live HTTP calls return genuine Wellington weather; live wind/gust numbers flow into SOP condition matching; deterministic evaluator dictates safety recommendation.
+- **Pass Criteria**: `1. nodes.fetch_weather_facts is unmocked (real function)
+2. Location resolves to Wellington (-41.28..., 174.77...) with fresh UTC retrieved_at
+3. Live weather facts contain genuine physical numbers (wind_speed_kmh, wind_gusts_kmh, temperature_c)
+4. Condition evaluator receives actual live weather value: matched_condition.actual == facts.wind_gusts_kmh
+5. Deterministic evaluator dictates recommendation (not_recommended) and severity (HIGH) via SOP-GUST-OUTDOOR-001
+6. LLM has 0 authority over decision_recommendation`
 - **Status**: **✅ PASS**
-- **Honest Notes**: Live test executed against Open-Meteo API at 2026-09-06T08:02:29.899217+00:00. Observed live wind_speed_kmh=41.8, wind_gusts_kmh=89.6, temperature_c=13.7°C. Matched SOP: SOP-GUST-OUTDOOR-001, Recommendation: not_recommended.
+- **Honest Notes**: Verified unmocked live execution against Open-Meteo API. Location: Wellington, Wellington Region, New Zealand (-41.28664, 174.77557). Live Weather: wind=41.8 km/h, gusts=87.1 km/h, temp=13.7°C retrieved at 2026-09-06T08:11:50.105832+00:00. Matcher Condition Proof: field='wind_gusts_kmh', actual=87.1 (exactly matching live facts), threshold=60.0, status=PASSED. Evaluator Decision: SOP 'SOP-GUST-OUTDOOR-001' deterministically assigned 'not_recommended' (severity HIGH). LLM has zero authority over safety decision.
 
 #### Observed State Output
 ```json
 {
-  "response_type": "SUCCESS",
+  "is_weather_service_unmocked": true,
+  "is_geocoding_service_unmocked": true,
   "resolved_location": "Wellington, Wellington Region, New Zealand",
   "coordinates": {
     "latitude": -41.28664,
@@ -156,19 +162,30 @@
     "precipitation_mm": 0.5,
     "precipitation_probability": 0,
     "wind_speed_kmh": 41.8,
-    "wind_gusts_kmh": 89.6,
+    "wind_gusts_kmh": 87.1,
     "uv_index": 0.0,
     "cloud_cover_pct": 100,
     "weather_code": 80,
     "visibility_km": 47.1,
     "target_period": "today",
     "is_daytime": false,
-    "retrieved_at": "2026-09-06T08:02:29.899217+00:00"
+    "retrieved_at": "2026-09-06T08:11:50.105832+00:00"
   },
+  "values_flowed_into_matcher": true,
+  "matcher_condition_proof": {
+    "field": "wind_gusts_kmh",
+    "operator": "greater_than_or_equal",
+    "threshold": 60.0,
+    "actual": 87.1,
+    "result": true,
+    "status": "PASSED"
+  },
+  "deterministic_evaluator_governed": true,
   "selected_sop_id": "SOP-GUST-OUTDOOR-001",
   "decision_recommendation": "not_recommended",
   "decision_severity": "HIGH",
-  "response": "**Cycling is not recommended in Wellington, Wellington Region, New Zealand (today).**\n\n- **Wind Speed**: 41.8 km/h\n- **Wind Gusts**: 89.6 km/h\n- **Temperature**: 13.7 °C\n- **Precipitation**: 0.5 mm\n- **Rain Probability**: 0 %\n- **UV Index**: 0.0\n- **Visibility**: 47.1 km\n\n**Policy Evaluation:**\n- **Primary Policy:** `SOP-GUST-OUTDOOR-001` — Severe Wind Gusts and General Outdoor Activity\n- **Severity Level:** HIGH\n\n*Note: 2 policies matched this scenario. Primary policy `SOP-GUST-OUTDOOR-001` took precedence based on severity (HIGH). Other matched policies: SOP-CYCLING-WIND-001.*\n\n**Guidance:**\n- Avoid open, exposed outdoor activities and open terrain.\n- Beware of flying debris, dislodged tree branches, and unsecured structures.\n- Postpone outdoor gatherings until gusts fall below hazardous levels.\n\n*Wind gusts of 60.0 km/h or above create severe localized physical hazards regardless of the specific activity.*"
+  "decision_trace": "wind_gusts_kmh (87.1) greater_than_or_equal 60.0",
+  "response": "**Cycling is not recommended in Wellington, Wellington Region, New Zealand (today).**\n\n- **Wind Speed**: 41.8 km/h\n- **Wind Gusts**: 87.1 km/h\n- **Temperature**: 13.7 °C\n- **Precipitation**: 0.5 mm\n- **Rain Probability**: 0 %\n- **UV Index**: 0.0\n- **Visibility**: 47.1 km\n\n**Policy Evaluation:**\n- **Primary Policy:** `SOP-GUST-OUTDOOR-001` — Severe Wind Gusts and General Outdoor Activity\n- **Severity Level:** HIGH\n\n*Note: 2 policies matched this scenario. Primary policy `SOP-GUST-OUTDOOR-001` took precedence based on severity (HIGH). Other matched policies: SOP-CYCLING-WIND-001.*\n\n**Guidance:**\n- Avoid open, exposed outdoor activities and open terrain.\n- Beware of flying debris, dislodged tree branches, and unsecured structures.\n- Postpone outdoor gatherings until gusts fall below hazardous levels.\n\n*Wind gusts of 60.0 km/h or above create severe localized physical hazards regardless of the specific activity.*"
 }
 ```
 

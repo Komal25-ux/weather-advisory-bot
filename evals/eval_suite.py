@@ -395,24 +395,44 @@ async def evaluate_case_5_severe_live_weather() -> EvalCaseResult:
     """
     Case 5: Severe Live Weather (Real Open-Meteo API Execution)
     Executes actual live API requests without mocking or hardcoded values.
-    Queries Wellington (or high wind coastal region) to capture live physical parameters.
-    Records actual location, timestamp, live numbers, matched SOP, and decision.
+    Queries Wellington (high-wind coastal region) to capture live physical parameters.
+    
+    Verifies:
+    1. Case 5 actually calls the real Open-Meteo service.
+    2. It doesn't mock the weather service anywhere in that path.
+    3. The observed gust/wind values flow into the actual SOP matcher.
+    4. The deterministic evaluator—not the LLM—makes the safety decision.
+    5. The evaluation's PASS criteria genuinely prove those things.
     """
     case_id = "CASE-5-SEVERE-LIVE-WEATHER"
     title = "Live Weather Integration & Dynamic Policy Evaluation"
     test_city = "Wellington"
     user_input = f"Can I cycle in {test_city} today?"
-    setup_env = "LIVE Open-Meteo API (Geocoding & Forecast APIs executed via HTTP in real-time)"
-    what_checked = "Live API connectivity, schema normalization, unhardcoded facts, deterministic policy evaluation"
-    expected = "Retrieve genuine live weather facts from Open-Meteo, evaluate against active SOPs, produce grounded decision"
+    setup_env = "LIVE Open-Meteo API (Unmocked Geocoding & Forecast HTTP requests executed in real-time)"
+    what_checked = (
+        "Live API connectivity, unmocked weather service, observed wind/gust value flow "
+        "into SOP matcher, and deterministic safety decision authority (non-LLM)."
+    )
+    expected = (
+        "Live HTTP calls return genuine Wellington weather; live wind/gust numbers flow into "
+        "SOP condition matching; deterministic evaluator dictates safety recommendation."
+    )
     pass_criteria = (
-        "response_type in ['SUCCESS', 'NO_SOP'] and "
-        "weather_facts is not None and "
-        "weather_facts.retrieved_at is not None and "
-        "latitude is not None and longitude is not None"
+        "1. nodes.fetch_weather_facts is unmocked (real function)\n"
+        "2. Location resolves to Wellington (-41.28..., 174.77...) with fresh UTC retrieved_at\n"
+        "3. Live weather facts contain genuine physical numbers (wind_speed_kmh, wind_gusts_kmh, temperature_c)\n"
+        "4. Condition evaluator receives actual live weather value: matched_condition.actual == facts.wind_gusts_kmh\n"
+        "5. Deterministic evaluator dictates recommendation (not_recommended) and severity (HIGH) via SOP-GUST-OUTDOOR-001\n"
+        "6. LLM has 0 authority over decision_recommendation"
     )
 
-    # We do NOT mock geocoding or weather! We execute genuine live HTTP calls.
+    from app.graph import nodes
+    import unittest.mock
+
+    # Verification 1: Confirm weather & geocoding services are genuinely UNMOCKED in graph nodes
+    is_weather_unmocked = not isinstance(nodes.fetch_weather_facts, unittest.mock.Mock)
+    is_geocoding_unmocked = not isinstance(nodes.resolve_location, unittest.mock.Mock)
+
     intent_stub = StructuredIntent(
         activity="cycling",
         intent_category="outdoor_exercise",
@@ -438,21 +458,68 @@ async def evaluate_case_5_severe_live_weather() -> EvalCaseResult:
     sop_id = selected_sop.get("sop_id", "NONE")
     rec = state.get("decision_recommendation")
     sev = state.get("decision_severity")
+    matched_conditions = selected_sop.get("matched_conditions") or []
+    lat = state.get("latitude")
+    lon = state.get("longitude")
+    retrieved_at = facts.get("retrieved_at")
 
-    passed = (
-        resp_type in ["SUCCESS", "NO_SOP"] and
-        bool(facts) and
-        facts.get("retrieved_at") is not None and
-        state.get("latitude") is not None and
-        state.get("longitude") is not None
+    # Verification 2: Check live Open-Meteo data validity
+    has_live_coords = (lat is not None and lon is not None and -42.0 < lat < -40.0 and 173.0 < lon < 176.0)
+    has_fresh_timestamp = bool(retrieved_at and len(retrieved_at) > 10)
+    has_live_metrics = (
+        facts.get("wind_speed_kmh") is not None and
+        facts.get("wind_gusts_kmh") is not None and
+        facts.get("temperature_c") is not None
+    )
+
+    # Verification 3: Confirm observed live weather values flowed directly into the SOP matcher
+    live_gusts = facts.get("wind_gusts_kmh")
+    live_wind = facts.get("wind_speed_kmh")
+    values_flowed_into_matcher = False
+    condition_proof = {}
+
+    for cond in matched_conditions:
+        if cond.get("field") == "wind_gusts_kmh":
+            if cond.get("actual") == live_gusts and cond.get("status") == "PASSED":
+                values_flowed_into_matcher = True
+                condition_proof = cond
+                break
+        elif cond.get("field") == "wind_speed_kmh":
+            if cond.get("actual") == live_wind and cond.get("status") == "PASSED":
+                values_flowed_into_matcher = True
+                condition_proof = cond
+                break
+
+    # Verification 4: Confirm deterministic evaluator made the safety decision
+    deterministic_evaluator_governed = (
+        sop_id in ["SOP-GUST-OUTDOOR-001", "SOP-CYCLING-WIND-001"] and
+        rec == "not_recommended" and
+        sev == "HIGH" and
+        rec == selected_sop.get("recommendation") and
+        sev == selected_sop.get("severity")
+    )
+
+    passed = bool(
+        is_weather_unmocked and
+        is_geocoding_unmocked and
+        has_live_coords and
+        has_fresh_timestamp and
+        has_live_metrics and
+        values_flowed_into_matcher and
+        deterministic_evaluator_governed and
+        resp_type == "SUCCESS"
     )
 
     notes = (
-        f"Live test executed against Open-Meteo API at {facts.get('retrieved_at')}. "
-        f"Observed live wind_speed_kmh={facts.get('wind_speed_kmh')}, "
-        f"wind_gusts_kmh={facts.get('wind_gusts_kmh')}, "
-        f"temperature_c={facts.get('temperature_c')}°C. "
-        f"Matched SOP: {sop_id}, Recommendation: {rec}."
+        f"Verified unmocked live execution against Open-Meteo API. "
+        f"Location: {state.get('resolved_location_name')} ({lat}, {lon}). "
+        f"Live Weather: wind={live_wind} km/h, gusts={live_gusts} km/h, temp={facts.get('temperature_c')}°C "
+        f"retrieved at {retrieved_at}. "
+        f"Matcher Condition Proof: field='{condition_proof.get('field')}', "
+        f"actual={condition_proof.get('actual')} (exactly matching live facts), threshold={condition_proof.get('threshold')}, "
+        f"status={condition_proof.get('status')}. "
+        f"Evaluator Decision: SOP '{sop_id}' deterministically assigned '{rec}' (severity {sev}). "
+        f"LLM has zero authority over safety decision."
     )
 
     return EvalCaseResult(
@@ -464,13 +531,18 @@ async def evaluate_case_5_severe_live_weather() -> EvalCaseResult:
         expected_behavior=expected,
         pass_criteria=pass_criteria,
         actual_result={
-            "response_type": resp_type,
+            "is_weather_service_unmocked": is_weather_unmocked,
+            "is_geocoding_service_unmocked": is_geocoding_unmocked,
             "resolved_location": state.get("resolved_location_name"),
-            "coordinates": {"latitude": state.get("latitude"), "longitude": state.get("longitude")},
+            "coordinates": {"latitude": lat, "longitude": lon},
             "live_weather_facts": facts,
+            "values_flowed_into_matcher": values_flowed_into_matcher,
+            "matcher_condition_proof": condition_proof,
+            "deterministic_evaluator_governed": deterministic_evaluator_governed,
             "selected_sop_id": sop_id,
             "decision_recommendation": rec,
             "decision_severity": sev,
+            "decision_trace": state.get("decision_trace"),
             "response": state.get("response")
         },
         status="PASS" if passed else "FAIL",

@@ -52,10 +52,23 @@ async def test_eval_case_4_another_paraphrased_intent():
 async def test_eval_case_5_severe_live_weather():
     result = await evaluate_case_5_severe_live_weather()
     assert result.status == "PASS", f"Case 5 failed: {result.actual_result}"
-    assert result.actual_result["response_type"] in ["SUCCESS", "NO_SOP"]
+    # 1. Verify weather and geocoding services were NOT mocked anywhere
+    assert result.actual_result["is_weather_service_unmocked"] is True
+    assert result.actual_result["is_geocoding_service_unmocked"] is True
+    # 2. Verify real live coordinates and live Open-Meteo timestamp
     assert result.actual_result["coordinates"]["latitude"] is not None
     assert result.actual_result["coordinates"]["longitude"] is not None
     assert result.actual_result["live_weather_facts"]["retrieved_at"] is not None
+    # 3. Verify observed live weather values flowed directly into the condition matcher
+    assert result.actual_result["values_flowed_into_matcher"] is True
+    condition = result.actual_result["matcher_condition_proof"]
+    assert condition["status"] == "PASSED"
+    field_tested = condition["field"]
+    assert condition["actual"] == result.actual_result["live_weather_facts"][field_tested]
+    # 4. Verify the deterministic evaluator (not LLM) made the safety decision
+    assert result.actual_result["deterministic_evaluator_governed"] is True
+    assert result.actual_result["decision_recommendation"] == "not_recommended"
+    assert result.actual_result["decision_severity"] == "HIGH"
 
 
 @pytest.mark.asyncio
