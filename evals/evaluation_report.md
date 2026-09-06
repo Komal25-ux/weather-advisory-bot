@@ -1,5 +1,5 @@
 # Weather-Advisory Support Bot — Evaluation Report
-**Execution Timestamp**: `2026-09-06T08:11:50.789110+00:00`  
+**Execution Timestamp**: `2026-09-06T08:16:50.077268+00:00`  
 **Total Cases Evaluated**: `8`  
 **Passed**: `8/8` (100.0%)  
 **Failed**: `0`  
@@ -144,7 +144,7 @@
 5. Deterministic evaluator dictates recommendation (not_recommended) and severity (HIGH) via SOP-GUST-OUTDOOR-001
 6. LLM has 0 authority over decision_recommendation`
 - **Status**: **✅ PASS**
-- **Honest Notes**: Verified unmocked live execution against Open-Meteo API. Location: Wellington, Wellington Region, New Zealand (-41.28664, 174.77557). Live Weather: wind=41.8 km/h, gusts=87.1 km/h, temp=13.7°C retrieved at 2026-09-06T08:11:50.105832+00:00. Matcher Condition Proof: field='wind_gusts_kmh', actual=87.1 (exactly matching live facts), threshold=60.0, status=PASSED. Evaluator Decision: SOP 'SOP-GUST-OUTDOOR-001' deterministically assigned 'not_recommended' (severity HIGH). LLM has zero authority over safety decision.
+- **Honest Notes**: Verified unmocked live execution against Open-Meteo API. Location: Wellington, Wellington Region, New Zealand (-41.28664, 174.77557). Live Weather: wind=41.1 km/h, gusts=86.0 km/h, temp=13.8°C retrieved at 2026-09-06T08:16:48.830310+00:00. Matcher Condition Proof: field='wind_gusts_kmh', actual=86.0 (exactly matching live facts), threshold=60.0, status=PASSED. Evaluator Decision: SOP 'SOP-GUST-OUTDOOR-001' deterministically assigned 'not_recommended' (severity HIGH). LLM has zero authority over safety decision.
 
 #### Observed State Output
 ```json
@@ -157,26 +157,26 @@
     "longitude": 174.77557
   },
   "live_weather_facts": {
-    "temperature_c": 13.7,
+    "temperature_c": 13.8,
     "relative_humidity_pct": 97,
-    "precipitation_mm": 0.5,
+    "precipitation_mm": 0.4,
     "precipitation_probability": 0,
-    "wind_speed_kmh": 41.8,
-    "wind_gusts_kmh": 87.1,
+    "wind_speed_kmh": 41.1,
+    "wind_gusts_kmh": 86.0,
     "uv_index": 0.0,
     "cloud_cover_pct": 100,
     "weather_code": 80,
     "visibility_km": 47.1,
     "target_period": "today",
     "is_daytime": false,
-    "retrieved_at": "2026-09-06T08:11:50.105832+00:00"
+    "retrieved_at": "2026-09-06T08:16:48.830310+00:00"
   },
   "values_flowed_into_matcher": true,
   "matcher_condition_proof": {
     "field": "wind_gusts_kmh",
     "operator": "greater_than_or_equal",
     "threshold": 60.0,
-    "actual": 87.1,
+    "actual": 86.0,
     "result": true,
     "status": "PASSED"
   },
@@ -184,8 +184,8 @@
   "selected_sop_id": "SOP-GUST-OUTDOOR-001",
   "decision_recommendation": "not_recommended",
   "decision_severity": "HIGH",
-  "decision_trace": "wind_gusts_kmh (87.1) greater_than_or_equal 60.0",
-  "response": "**Cycling is not recommended in Wellington, Wellington Region, New Zealand (today).**\n\n- **Wind Speed**: 41.8 km/h\n- **Wind Gusts**: 87.1 km/h\n- **Temperature**: 13.7 °C\n- **Precipitation**: 0.5 mm\n- **Rain Probability**: 0 %\n- **UV Index**: 0.0\n- **Visibility**: 47.1 km\n\n**Policy Evaluation:**\n- **Primary Policy:** `SOP-GUST-OUTDOOR-001` — Severe Wind Gusts and General Outdoor Activity\n- **Severity Level:** HIGH\n\n*Note: 2 policies matched this scenario. Primary policy `SOP-GUST-OUTDOOR-001` took precedence based on severity (HIGH). Other matched policies: SOP-CYCLING-WIND-001.*\n\n**Guidance:**\n- Avoid open, exposed outdoor activities and open terrain.\n- Beware of flying debris, dislodged tree branches, and unsecured structures.\n- Postpone outdoor gatherings until gusts fall below hazardous levels.\n\n*Wind gusts of 60.0 km/h or above create severe localized physical hazards regardless of the specific activity.*"
+  "decision_trace": "wind_gusts_kmh (86.0) greater_than_or_equal 60.0",
+  "response": "**Cycling is not recommended in Wellington, Wellington Region, New Zealand (today).**\n\n- **Wind Speed**: 41.1 km/h\n- **Wind Gusts**: 86.0 km/h\n- **Temperature**: 13.8 °C\n- **Precipitation**: 0.4 mm\n- **Rain Probability**: 0 %\n- **UV Index**: 0.0\n- **Visibility**: 47.1 km\n\n**Policy Evaluation:**\n- **Primary Policy:** `SOP-GUST-OUTDOOR-001` — Severe Wind Gusts and General Outdoor Activity\n- **Severity Level:** HIGH\n\n*Note: 2 policies matched this scenario. Primary policy `SOP-GUST-OUTDOOR-001` took precedence based on severity (HIGH). Other matched policies: SOP-CYCLING-WIND-001.*\n\n**Guidance:**\n- Avoid open, exposed outdoor activities and open terrain.\n- Beware of flying debris, dislodged tree branches, and unsecured structures.\n- Postpone outdoor gatherings until gusts fall below hazardous levels.\n\n*Wind gusts of 60.0 km/h or above create severe localized physical hazards regardless of the specific activity.*"
 }
 ```
 
