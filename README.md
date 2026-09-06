@@ -21,7 +21,7 @@ This bot solves these challenges by treating weather safety as a **deterministic
 
 ## 2. Architecture & Trust Boundary
 
-```
+```text
 [ Frontend (HTML/JS/CSS) ]
            │  (HTTP POST /chat with session_id)
            ▼
@@ -29,7 +29,7 @@ This bot solves these challenges by treating weather safety as a **deterministic
            │
            ▼
 [ LangGraph StateGraph (`app/graph/workflow.py`) ]
-   ├─► 1. `parse_intent`       (Gemini / OpenAI API: extracts activity, location, time, target_group)
+   ├─► 1. `parse_intent`       (Gemini: extracts activity, location, time, target_group)
    ├─► 2. `resolve_location`   (Open-Meteo Geocoding: resolves city name -> lat/lon/timezone)
    ├─► 3. `fetch_weather`      (Open-Meteo Forecast: pulls current or hourly window facts)
    ├─► 4. `match_sops`         (Deterministic SOP Engine: checks rules against facts)
@@ -52,14 +52,15 @@ This bot solves these challenges by treating weather safety as a **deterministic
 
 ## 3. LangGraph Workflow & State Management
 
-The workflow is implemented using LangGraph's `StateGraph` with a single persistent `MemorySaver` checkpointing per `session_id` (`thread_id`):
+The workflow is implemented using LangGraph's `StateGraph` with a `MemorySaver` checkpointing per `session_id` (`thread_id`):
 
 - **Conditional Branching**:
-  - Missing activity/location $\rightarrow$ routes directly to `handle_intent_clarification`.
-  - Geocoding failure $\rightarrow$ routes to `handle_location_failure`.
-  - Weather fetch failure $\rightarrow$ routes to `handle_weather_failure`.
-  - Zero matching SOPs $\rightarrow$ routes to `handle_no_sop` (explicitly stating no configured policy applies).
-  - Valid matching SOP $\rightarrow$ routes to `select_decision` $\rightarrow$ `generate_grounded_response`.
+  - Missing activity/location -> routes directly to `handle_intent_clarification`.
+  - Intent extraction/provider failure -> routes to `handle_failure` with `INTENT_FAILURE` (not misclassified as ambiguity).
+  - Geocoding failure -> routes to `handle_failure` with `LOCATION_FAILURE`.
+  - Weather fetch failure -> routes to `handle_failure` with `WEATHER_FAILURE`.
+  - Zero matching SOPs -> routes to `handle_no_sop` (explicitly stating no configured policy applies).
+  - Valid matching SOP -> routes to `select_decision` -> `generate_grounded_response`.
 - **Session Memory**:
   - Multi-turn queries retain prior slots (`activity`, `location`, `target_group`).
   - Follow-up *"What about this evening?"* keeps location/activity, updates `time_reference`, and **clears old weather facts** to guarantee fresh meteorological fetching.
@@ -72,14 +73,15 @@ The workflow is implemented using LangGraph's `StateGraph` with a single persist
 
 Safety policies are defined as human-auditable YAML files in `config/sops/`:
 
-- `SOP-CYCLING-WIND-001`: High winds ($\ge 35\text{ km/h}$) or gusts ($\ge 50\text{ km/h}$) for cycling.
-- `SOP-HEAT-ELDERLY-001`: Extreme heat ($\ge 35^\circ\text{C}$) for elderly / vulnerable groups.
-- `SOP-RAIN-EXERCISE-001`: Heavy rain ($\ge 5\text{ mm/h}$) for outdoor running and exercise.
+- `SOP-CYCLING-WIND-001`: High winds (>= 35 km/h) or gusts (>= 50 km/h) for cycling.
+- `SOP-HEAT-ELDERLY-001`: Extreme heat (>= 35°C) for elderly / vulnerable groups.
+- `SOP-RAIN-EXERCISE-001`: Heavy rain (>= 5 mm/h) for outdoor running and exercise.
 - `SOP-THUNDERSTORM-001`: Thunderstorms / convective activity (WMO codes 95, 96, 99).
 - `SOP-FAVORABLE-OUTDOOR-001`: Baseline favorable outdoor weather condition policy.
 
 ### Adding a New SOP (Zero-Code Modification)
 To add or modify an SOP, place a valid YAML file into `config/sops/`:
+
 ```yaml
 id: SOP-NEW-POLICY-001
 title: High UV Advisory
@@ -95,7 +97,8 @@ conditions:
 recommendation: caution
 guidance: "UV index is extreme. Wear SPF 50+, sunglasses, and seek shade between 11:00 and 15:00."
 ```
-The loader automatically validates the schema and hot-loads it without restarting or modifying graph routing, weather fetching, or LLM code.
+
+The loader automatically validates the schema without requiring changes to graph routing, weather fetching, or LLM code. The evaluation engine is generic and discovers SOPs from configuration rather than hardcoding individual policy IDs.
 
 ---
 
@@ -117,6 +120,7 @@ When multiple SOPs match simultaneously, the decision engine in `app/policies/ev
   - `today` / `now`: Current instantaneous observation metrics.
   - `this evening` / `tomorrow evening`: Aggregated hourly window (17:00–21:00 local time) calculating worst-case metrics (max gusts, max precipitation, average temperature).
 - **Resilience**: Configured with bounded retries (exponential backoff) and explicit timeouts.
+- **No synthetic fallback weather**: If Open-Meteo cannot be reached or returns an upstream error, the bot does not invent, cache as current, or substitute weather facts. It returns `WEATHER_FAILURE` and stops the safety recommendation path.
 
 ---
 
@@ -127,7 +131,7 @@ The bot utilizes Google's official OpenAI-compatible endpoint:
 - **Primary Model**: `gemini-3.6-flash`
 - **Fallback Models**: `gemini-3.5-flash`, `gemini-3.5-flash-lite`
 - **Model Rotation**: On retryable provider availability failures (HTTP 429, HTTP 408, HTTP 5xx, timeouts, or quota limits), the service automatically rotates through configured fallback models (`LLM_FALLBACK_MODELS`). Model fallback improves operational resilience when a specific model is temporarily rate-limited or unavailable (though it does not guarantee quota availability if project-level limits are reached).
-- **Deterministic Response Fallback**: If grounded response generation fails across all candidate models, the bot automatically falls back to its deterministic response generator (`format_deterministic_advisory`), guaranteeing continuous uptime and zero safety-recommendation drift.
+- **Deterministic Response Fallback**: If grounded response generation fails across all candidate models, the bot automatically falls back to its deterministic response generator (`format_deterministic_advisory`), guaranteeing safe response behavior without allowing the LLM to alter the underlying safety decision.
 
 ---
 
@@ -164,13 +168,44 @@ are thwarted because:
 
 ---
 
-## 11. Setup & Installation
+## 11. Live Demo
+
+**Deployed application:** https://weather-advisory-bot-u259.onrender.com/
+
+The public demo is deployed on Render and uses the same application code and configuration described in this repository.
+
+### Important demo note
+
+The bot intentionally depends on the live Open-Meteo Forecast API for weather facts. During testing, the deployed Render instance encountered an upstream Open-Meteo **HTTP 429 daily API limit** even though the same Open-Meteo request succeeded locally from the development machine.
+
+This is an external infrastructure/quota condition, not a synthetic weather fallback or application-level weather substitution. The application is designed to **fail closed** in this situation:
+
+```text
+Render application
+      ↓
+Open-Meteo Forecast API
+      ↓
+HTTP 429 / upstream limit
+      ↓
+WEATHER_FAILURE
+      ↓
+No weather-based safety recommendation is generated
+```
+
+For local verification, the same endpoint can be queried directly and the application can be run with the setup below. A working upstream response is required before the bot can make a weather-based recommendation.
+
+This behavior is intentional and satisfies the safety requirement that the bot must never fabricate or assume weather data when the authoritative live weather source is unavailable.
+
+---
+
+## 12. Setup & Installation
 
 ### Prerequisites
 - Python 3.11+
 - Node.js (for JS syntax verification: `node --check frontend/app.js`)
 
 ### 1. Clone & Setup Environment
+
 ```bash
 git clone <repo-url>
 cd weather-advisory-bot
@@ -184,11 +219,15 @@ pip install -r requirements.txt
 ```
 
 ### 2. Configure Environment Variables
+
 Create a local `.env` file based on `.env.example`:
+
 ```bash
 cp .env.example .env
 ```
+
 Edit `.env` and provide your Gemini API key:
+
 ```ini
 LLM_PROVIDER=gemini
 LLM_API_KEY=your_actual_gemini_api_key_here
@@ -197,56 +236,103 @@ LLM_MODEL=gemini-3.6-flash
 LLM_FALLBACK_MODELS=gemini-3.5-flash,gemini-3.5-flash-lite
 LLM_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai/
 ```
-*(Note: `.env` is git-ignored and must never be committed).*
+
+*(Note: `.env` is git-ignored and must never be committed.)*
 
 ---
 
-## 12. Running the Application
+## 13. Running the Application
 
 ### Start the Backend Server
+
 ```bash
 uvicorn app.main:app --reload --port 8000
 ```
+
 - **Backend API**: `http://localhost:8000`
 - **Interactive UI**: `http://localhost:8000/`
 - **Swagger Documentation**: `http://localhost:8000/docs`
 
 ---
 
-## 13. Running Tests & Evaluations
+## 14. Running Tests & Evaluations
 
 ### Automated Unit & Integration Tests (136 Tests)
+
 ```bash
 pytest -q
 ```
 
 ### Frontend Syntax Verification
+
 ```bash
 node --check frontend/app.js
 ```
 
 ### End-to-End Evaluation Suite (Including Live Open-Meteo Case)
+
 ```bash
 ./.venv/bin/python evals/run_evals.py
 ```
-This executes all 8 required evaluation scenarios (clear SOP, paraphrased intent, live high-wind Open-Meteo test in Wellington, prompt injection, weather failure, missing fields) and updates:
+
+This executes all 8 evaluation scenarios (clear SOP, paraphrased intent, live high-wind Open-Meteo test in Wellington, prompt injection, weather failure, missing fields) and updates:
 - `evals/evaluation_report.md`
 - `evals/evaluation_report.json`
 
 ---
 
-## 14. SOP Policy Rationale
+## 15. SOP Policy Rationale
 
 The configured safety policies align with international meteorological and public health standards:
-- **Wind & Cycling**: Wind speeds exceeding $35\text{ km/h}$ or gusts over $50\text{ km/h}$ severely destabilize two-wheeled vehicles (Beaufort scale 6–7).
-- **Vulnerable Groups & Extreme Heat**: Temperatures above $35^\circ\text{C}$ place significant cardiovascular stress on elderly individuals (CDC & WHO Heat Guidelines). In mild weather ($18^\circ\text{C}$), this policy does not trigger, allowing baseline favorable policies to apply.
-- **Precipitation & Running**: Rain rates $\ge 5\text{ mm/h}$ impair visibility and increase slipping hazards on paved routes.
+- **Wind & Cycling**: Wind speeds exceeding 35 km/h or gusts over 50 km/h severely destabilize two-wheeled vehicles (Beaufort scale 6–7).
+- **Vulnerable Groups & Extreme Heat**: Temperatures above 35°C place significant cardiovascular stress on elderly individuals (CDC & WHO Heat Guidelines). In mild weather (18°C), this policy does not trigger, allowing baseline favorable policies to apply.
+- **Precipitation & Running**: Rain rates >= 5 mm/h impair visibility and increase slipping hazards on paved routes.
 - **Severe Convection**: Thunderstorms with active lightning pose life-threatening risks for any outdoor recreation.
 
 ---
 
-## 15. Known Limitations
+## 16. Evaluation Results
 
-1. **External API Rate Limits**: Live weather queries and LLM API calls are subject to upstream provider rate limits and quota allocations. If the LLM rate limit is encountered or quota is exhausted, the system automatically falls back to deterministic advisory generation to maintain continuous, safe operation.
-2. **Temporal Resolution**: Open-Meteo hourly forecasts aggregate over 60-minute increments; sub-hourly micro-bursts are represented via maximum gust metrics.
-3. **Hyper-Local Terrain**: Open-Meteo resolution is typically 1–11 km grid cells; extreme microclimates (e.g. narrow mountain passes) may experience localized variations.
+The latest authoritative evaluation run contains **8/8 passing evaluation cases** and **136/136 passing automated tests**.
+
+The evaluation suite covers:
+1. Clear SOP case — cycling under high wind.
+2. Clear SOP case — two-wheeler under high wind.
+3. Paraphrased intent — road cycling.
+4. Paraphrased intent — child playground outing.
+5. Severe live-weather case — Wellington, grounded in live Open-Meteo data at evaluation time.
+6. No-SOP case — unsupported activity.
+7. Simulated weather API failure.
+8. Adversarial prompt-injection / fabricated-weather case.
+
+The live severe-weather evaluation intentionally uses the weather returned by Open-Meteo at execution time rather than hardcoding the assignment's example location or event.
+
+---
+
+## 17. Known Limitations
+
+1. **External API Rate Limits**: Both Open-Meteo and Gemini are external services and are subject to upstream availability, rate limits, and quota allocations. If Gemini intent extraction encounters retryable quota/availability errors, the service rotates through configured fallback models. If live weather retrieval encounters an upstream failure such as HTTP 429, the application returns `WEATHER_FAILURE` and does not fabricate or substitute weather facts.
+2. **Render Demo Availability**: The free Render web service can experience cold starts after inactivity. In addition, the current public demo can encounter an Open-Meteo upstream daily API limit associated with its deployment environment. The repository remains fully runnable locally, and the application's fail-closed behavior is intentionally preserved rather than bypassing the required live weather source.
+3. **Temporal Resolution**: Open-Meteo hourly forecasts aggregate over 60-minute increments; sub-hourly micro-bursts are represented via maximum gust metrics.
+4. **Hyper-Local Terrain**: Open-Meteo resolution is typically 1–11 km grid cells; extreme microclimates (e.g. narrow mountain passes) may experience localized variations.
+
+---
+
+## 18. Submission Checklist
+
+- [x] Standalone Git repository
+- [x] Real LangGraph `StateGraph` with conditional branching
+- [x] Live Open-Meteo geocoding + forecast integration
+- [x] Configurable SOP policy engine with YAML policies
+- [x] Deterministic safety decision and conflict resolution
+- [x] SOP traceability and weather facts in API response
+- [x] Session-scoped LangGraph memory
+- [x] Gemini structured intent extraction + grounded response generation
+- [x] Model rotation for retryable LLM provider failures
+- [x] Adversarial prompt-injection defenses
+- [x] Failure-safe handling for LLM, location, and weather failures
+- [x] Automated tests and evaluation suite
+- [x] Minimal frontend
+- [x] Public deployment on Render
+
+**Safety principle:** when authoritative live weather data is unavailable, the system does not guess. It reports the failure and stops the weather-based recommendation path.
