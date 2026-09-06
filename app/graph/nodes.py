@@ -36,34 +36,119 @@ def _get_sops():
     return _LOADED_SOPS
 
 
+def _append_chat_history(state: WeatherState, response_text: str) -> List[Dict[str, str]]:
+    """Appends current turn user message and bot response to session chat history."""
+    history = list(state.get("chat_history") or [])
+    user_msg = state.get("user_message")
+    if user_msg:
+        history.append({"role": "user", "content": user_msg})
+    history.append({"role": "assistant", "content": response_text})
+    return history
+
+
 async def parse_intent_node(state: WeatherState) -> Dict[str, Any]:
-    """Node 1: Extracts structured user intent using LLM structured output."""
+    """
+    Node 1: Extracts structured user intent and manages session context merging.
+    Enables multi-turn conversational follow-ups (e.g. 'What about this evening?').
+    """
     user_msg = state.get("user_message", "")
     history = state.get("chat_history", [])
 
+    # Retain prior turn state from session checkpointer
+    prior_activity = state.get("activity")
+    prior_category = state.get("intent_category")
+    prior_location = state.get("location_name")
+    prior_target = state.get("target_group", "general")
+    prior_time = state.get("time_reference")
+
     try:
         intent = await extract_intent(user_message=user_msg, chat_history=history)
-        needs_clarification = (
-            intent.is_clarification_needed or
-            not intent.location_name or
-            not intent.activity
+
+        # Context merging logic:
+        # 1. Activity: new explicit activity replaces prior; otherwise retain prior
+        activity = intent.activity or prior_activity
+        intent_category = intent.intent_category or prior_category
+
+        # 2. Location: new explicit location replaces prior; otherwise retain prior
+        location_name = intent.location_name or prior_location
+
+        # Detect location change: if location changed, clear previous coordinates to force fresh geocoding
+        location_changed = bool(
+            intent.location_name and
+            prior_location and
+            intent.location_name.strip().lower() != prior_location.strip().lower()
         )
-        return {
-            "activity": intent.activity,
-            "intent_category": intent.intent_category,
-            "location_name": intent.location_name,
-            "time_reference": intent.time_reference or "today",
-            "target_group": intent.target_group or "general",
+
+        # 3. Time Reference:
+        # Check if user message explicitly contains temporal keywords
+        TIME_KEYWORDS = [
+            "today", "tonight", "this evening", "evening", "this morning", "morning",
+            "this afternoon", "afternoon", "tomorrow", "now", "night", "currently"
+        ]
+        msg_lower = user_msg.lower()
+        user_specified_time = any(kw in msg_lower for kw in TIME_KEYWORDS)
+
+        if user_specified_time:
+            time_ref = intent.time_reference or "today"
+        elif prior_time:
+            time_ref = prior_time
+        else:
+            time_ref = intent.time_reference or "today"
+
+        # 4. Target Group:
+        if intent.target_group and intent.target_group != "general":
+            target_group = intent.target_group
+        else:
+            target_group = prior_target or "general"
+
+        # 5. Clarification Check:
+        # If after context merging we have both an activity and a location,
+        # and intent extraction did not flag an independent reason (e.g. gibberish/refusal),
+        # clarification is NOT needed.
+        has_both = bool(activity and location_name)
+        if not has_both:
+            needs_clarification = True
+        elif intent.is_clarification_needed and not (intent.activity or intent.location_name):
+            # The single utterance lacked context on its own, but we successfully
+            # merged activity and location from previous turns in this session.
+            needs_clarification = False
+        else:
+            needs_clarification = intent.is_clarification_needed
+
+        updates: Dict[str, Any] = {
+            "activity": activity,
+            "intent_category": intent_category,
+            "location_name": location_name,
+            "time_reference": time_ref,
+            "target_group": target_group,
             "intent_confidence": intent.confidence,
             "is_clarification_needed": needs_clarification,
+            # Invalidate previous weather facts so fresh weather is ALWAYS fetched
+            "weather_facts": None,
+            "candidate_sops": None,
+            "selected_sop": None,
+            "decision_severity": None,
+            "decision_recommendation": None,
+            "error_type": None,
+            "error_message": None,
             "trace": {
                 **state.get("trace", {}),
-                "extracted_activity": intent.activity,
-                "extracted_location": intent.location_name,
-                "time_reference": intent.time_reference,
-                "target_group": intent.target_group,
+                "extracted_activity": activity,
+                "extracted_location": location_name,
+                "time_reference": time_ref,
+                "target_group": target_group,
             }
         }
+
+        # If location changed, clear coordinates to force fresh geocoding
+        if location_changed:
+            updates["resolved_location_name"] = None
+            updates["latitude"] = None
+            updates["longitude"] = None
+            updates["timezone"] = None
+
+        return updates
+
     except Exception as e:
         logger.error(f"Intent extraction node error: {e}")
         return {
@@ -270,7 +355,8 @@ async def generate_response_node(state: WeatherState) -> Dict[str, Any]:
 
     return {
         "response_type": "SUCCESS",
-        "response": response_text
+        "response": response_text,
+        "chat_history": _append_chat_history(state, response_text)
     }
 
 
@@ -288,7 +374,8 @@ async def handle_intent_clarification_node(state: WeatherState) -> Dict[str, Any
 
     return {
         "response_type": "INTENT_CLARIFICATION",
-        "response": msg
+        "response": msg,
+        "chat_history": _append_chat_history(state, msg)
     }
 
 
@@ -306,7 +393,8 @@ async def handle_failure_node(state: WeatherState) -> Dict[str, Any]:
 
     return {
         "response_type": resp_type,
-        "response": msg
+        "response": msg,
+        "chat_history": _append_chat_history(state, msg)
     }
 
 
@@ -325,5 +413,6 @@ async def handle_no_sop_node(state: WeatherState) -> Dict[str, Any]:
     )
     return {
         "response_type": "NO_SOP",
-        "response": msg
+        "response": msg,
+        "chat_history": _append_chat_history(state, msg)
     }

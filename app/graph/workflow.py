@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, Optional, Dict
 import logging
 from langgraph.graph import StateGraph, START, END
 
@@ -24,9 +24,10 @@ from app.graph.routing import (
 logger = logging.getLogger("weather-advisory-bot.graph.workflow")
 
 
-def build_weather_graph() -> Any:
+def build_weather_graph(checkpointer: Optional[Any] = None) -> Any:
     """
-    Constructs and compiles the real LangGraph StateGraph with explicit conditional edges.
+    Constructs and compiles the real LangGraph StateGraph with explicit conditional edges
+    and session-scoped memory checkpointing.
     """
     builder = StateGraph(WeatherState)
 
@@ -94,7 +95,42 @@ def build_weather_graph() -> Any:
     builder.add_edge("handle_failure", END)
     builder.add_edge("handle_no_sop", END)
 
-    # 9. Compile the graph
-    compiled_graph = builder.compile()
-    logger.info("LangGraph StateGraph compiled successfully.")
+    # 9. Compile the graph with checkpointer
+    if checkpointer is False:
+        # Allows explicitly disabling checkpointer if requested
+        compiled_graph = builder.compile()
+    elif checkpointer is not None:
+        compiled_graph = builder.compile(checkpointer=checkpointer)
+    else:
+        from app.services.session import session_manager
+        compiled_graph = builder.compile(checkpointer=session_manager.checkpointer)
+
+    if checkpointer is not False:
+        import uuid
+        orig_ainvoke = compiled_graph.ainvoke
+        orig_invoke = compiled_graph.invoke
+
+        def _ensure_config(input_data: Any, config: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+            cfg = dict(config or {})
+            configurable = dict(cfg.get("configurable", {}))
+            if "thread_id" not in configurable:
+                if isinstance(input_data, dict) and input_data.get("session_id"):
+                    configurable["thread_id"] = str(input_data["session_id"]).strip()
+                else:
+                    configurable["thread_id"] = f"auto-{uuid.uuid4().hex[:8]}"
+            cfg["configurable"] = configurable
+            return cfg
+
+        async def auto_thread_ainvoke(input_data: Any, config: Optional[Dict[str, Any]] = None, **kwargs: Any) -> Any:
+            cfg = _ensure_config(input_data, config)
+            return await orig_ainvoke(input_data, config=cfg, **kwargs)
+
+        def auto_thread_invoke(input_data: Any, config: Optional[Dict[str, Any]] = None, **kwargs: Any) -> Any:
+            cfg = _ensure_config(input_data, config)
+            return orig_invoke(input_data, config=cfg, **kwargs)
+
+        compiled_graph.ainvoke = auto_thread_ainvoke
+        compiled_graph.invoke = auto_thread_invoke
+
+    logger.info("LangGraph StateGraph compiled successfully with checkpointer.")
     return compiled_graph
