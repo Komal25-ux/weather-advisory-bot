@@ -130,11 +130,147 @@ async def extract_intent(
         raise LLMServiceError(f"LLM intent extraction service error: {e}") from e
 
 
+RESPONSE_GENERATOR_SYSTEM_PROMPT = """You are an accurate, grounded advisory response verbalizer for an automated safety system.
+The safety decision and policy evaluation have ALREADY been executed deterministically by application logic. You are strictly verbalizing the established decision.
+
+STRICT CONSTRAINTS:
+1. YOU MUST NEVER OVERRIDE, MODIFY, OR CONTRADICT THE DETERMINISTIC RECOMMENDATION:
+   - If recommendation is 'not_recommended': State clearly that the activity is NOT recommended under policy.
+   - If recommendation is 'caution': State that caution and protective measures are advised.
+   - If recommendation is 'recommended': State that conditions appear broadly favorable under policy.
+2. USE ONLY SUPPLIED WEATHER FACTS:
+   - Quote exact numeric values from 'facts_used' (e.g. '43.2 km/h').
+   - NEVER calculate, estimate, round differently, or invent weather numbers.
+   - If a metric value is 'UNAVAILABLE', explicitly state that it is unavailable.
+3. CITE THE APPLICABLE STANDARD OPERATING PROCEDURE:
+   - Explicitly cite the policy ID (e.g. 'SOP-CYCLING-WIND-001') and policy name.
+   - State the severity level (e.g. 'HIGH').
+   - If 'applicable_sop_ids' contains multiple policies, acknowledge that multiple policies matched and that this primary policy took precedence due to severity/priority ranking.
+4. COMMUNICATE ESSENTIAL CONTEXT:
+   - Clearly state the activity, location, and relevant time period.
+   - Include the key guidance bullets and rationale from the SOP.
+   - Keep the answer concise, professional, and well-structured in markdown.
+"""
+
+
+def format_deterministic_advisory(payload: "ResponseGenerationPayload") -> str:
+    """
+    Deterministic template verbalizer used as a guaranteed grounded fallback.
+    Ensures that even on LLM outage, zero hallucination occurs and decisions remain fully auditable.
+    """
+    rec_title = {
+        "not_recommended": f"**{payload.activity.capitalize()} is not recommended in {payload.location} ({payload.time_period}).**",
+        "caution": f"**Caution is advised for {payload.activity} in {payload.location} ({payload.time_period}).**",
+        "recommended": f"**Conditions appear broadly favorable for {payload.activity} in {payload.location} ({payload.time_period}).**"
+    }.get(payload.recommendation, f"**Advisory for {payload.activity} in {payload.location}.**")
+
+    facts_lines = []
+    for f in payload.facts_used:
+        val_str = f"{f.value} {f.unit}".strip() if f.value != "UNAVAILABLE" else "Unavailable"
+        facts_lines.append(f"- **{f.name}**: {val_str}")
+    facts_block = "\n".join(facts_lines)
+
+    multi_policy_note = ""
+    if len(payload.applicable_sop_ids) > 1:
+        other_policies = [p for p in payload.applicable_sop_ids if p != payload.selected_sop_id]
+        multi_policy_note = (
+            f"\n*Note: {len(payload.applicable_sop_ids)} policies matched this scenario. "
+            f"Primary policy `{payload.selected_sop_id}` took precedence based on severity ({payload.severity}). "
+            f"Other matched policies: {', '.join(other_policies)}.*\n"
+        )
+
+    guidance_block = "\n".join([f"- {g}" for g in payload.guidance]) if payload.guidance else "- Follow standard precautions."
+    rationale_str = f"\n*{payload.rationale}*" if payload.rationale else ""
+
+    return f"""{rec_title}
+
+{facts_block}
+
+**Policy Evaluation:**
+- **Primary Policy:** `{payload.selected_sop_id}` — {payload.selected_sop_name}
+- **Severity Level:** {payload.severity}
+{multi_policy_note}
+**Guidance:**
+{guidance_block}
+{rationale_str}
+""".strip()
+
+
 async def generate_grounded_response(
-    decision_payload: Dict,
+    payload: Any,
+    custom_runnable: Optional[Any] = None
 ) -> str:
     """
-    Placeholder: verbalizes deterministic decision into user-facing response.
-    Full implementation scheduled for Iteration 7.
+    Verbalizes the deterministic decision into natural language while strictly
+    preserving safety recommendation, weather numbers, and SOP citations.
     """
-    raise NotImplementedError("LLM response generation will be implemented in Iteration 7.")
+    from app.schemas.response_payload import ResponseGenerationPayload
+    if not isinstance(payload, ResponseGenerationPayload):
+        payload = ResponseGenerationPayload.model_validate(payload)
+
+    # Prompt constructing user context strictly bounded by trusted facts
+    prompt_content = f"""Deterministic Decision Input:
+- Activity: {payload.activity}
+- Location: {payload.location}
+- Time Period: {payload.time_period}
+- Recommendation: {payload.recommendation}
+- Severity: {payload.severity}
+- Primary Policy ID: {payload.selected_sop_id}
+- Primary Policy Name: {payload.selected_sop_name}
+- All Applicable Policy IDs: {payload.applicable_sop_ids}
+- Facts Used: {[{'name': f.name, 'value': f.value, 'unit': f.unit} for f in payload.facts_used]}
+- Guidance: {payload.guidance}
+- Rationale: {payload.rationale}
+- Decision Trace: {payload.decision_trace}
+"""
+
+    messages = [
+        SystemMessage(content=RESPONSE_GENERATOR_SYSTEM_PROMPT),
+        HumanMessage(content=prompt_content)
+    ]
+
+    try:
+        if custom_runnable is not None:
+            runnable = custom_runnable
+        else:
+            api_key = settings.LLM_API_KEY or "dummy_key_for_testing"
+            runnable = ChatOpenAI(
+                model=settings.LLM_MODEL,
+                api_key=api_key,
+                base_url=settings.LLM_BASE_URL,
+                timeout=settings.LLM_TIMEOUT_SECONDS,
+                temperature=0.2
+            )
+
+        if hasattr(runnable, "ainvoke"):
+            response_msg = await runnable.ainvoke(messages)
+        elif hasattr(runnable, "invoke"):
+            response_msg = runnable.invoke(messages)
+        elif callable(runnable):
+            import inspect
+            if inspect.iscoroutinefunction(runnable):
+                response_msg = await runnable(messages)
+            else:
+                response_msg = runnable(messages)
+        else:
+            raise LLMServiceError(f"Unsupported runnable type: {type(runnable)}")
+
+        content = response_msg.content if hasattr(response_msg, "content") else str(response_msg)
+
+        # Defense-in-depth guardrail verification:
+        # 1. Ensure recommendation is not inverted
+        if payload.recommendation == "not_recommended":
+            low_content = content.lower()
+            if "is safe" in low_content or "is recommended" in low_content and "not recommended" not in low_content:
+                logger.warning("LLM output violated safety recommendation. Falling back to deterministic advisory.")
+                return format_deterministic_advisory(payload)
+
+        # 2. Ensure primary SOP ID is cited
+        if payload.selected_sop_id not in content:
+            content += f"\n\n**Policy:** `{payload.selected_sop_id}` — {payload.selected_sop_name} (Severity: {payload.severity})"
+
+        return content
+
+    except Exception as e:
+        logger.warning(f"LLM grounded response generation unavailable ({e}). Employing deterministic advisory fallback.")
+        return format_deterministic_advisory(payload)

@@ -238,5 +238,6 @@ async def test_normal_successful_path_reaches_response_generation(graph):
         assert final_state.get("response_type") == "SUCCESS"
         assert final_state.get("selected_sop") is not None
         assert final_state.get("selected_sop")["sop_id"] == "SOP-CYCLING-WIND-001"
-        assert "Policy evaluated: SOP-CYCLING-WIND-001" in final_state.get("response", "")
+        assert "SOP-CYCLING-WIND-001" in final_state.get("response", "")
+        assert "not recommended" in final_state.get("response", "").lower()
         assert final_state.get("trace")["matched_sop_count"] >= 1

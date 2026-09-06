@@ -3,7 +3,8 @@ from typing import Dict, Any, List
 
 from app.config import settings
 from app.graph.state import WeatherState
-from app.services.llm import extract_intent
+from app.services.llm import extract_intent, generate_grounded_response
+from app.schemas.response_payload import ResponseGenerationPayload, FactToReport
 from app.services.geocoding import (
     resolve_location,
     LocationResolutionError,
@@ -221,14 +222,55 @@ async def select_decision_node(state: WeatherState) -> Dict[str, Any]:
 
 async def generate_response_node(state: WeatherState) -> Dict[str, Any]:
     """
-    Node 6: Minimal integration response node for graph routing testing.
-    Full LLM grounded composition scheduled for Iteration 7.
+    Node 6: Grounded LLM Response Generator.
+    Turns the deterministic decision state into a natural, user-friendly answer.
+    The LLM is strictly constrained to verbalize and cannot override the decision.
     """
-    selected = state.get("selected_sop") or {}
-    sop_id = selected.get("sop_id", "UNKNOWN")
+    activity = state.get("activity", "outdoor activity")
+    location = state.get("resolved_location_name") or state.get("location_name", "your location")
+    time_period = state.get("time_reference", "today")
+    selected_sop = state.get("selected_sop") or {}
+    facts = state.get("weather_facts") or {}
+
+    # Extract all relevant facts into FactToReport objects
+    facts_used: List[FactToReport] = []
+    if facts.get("wind_speed_kmh") is not None:
+        facts_used.append(FactToReport(name="Wind Speed", value=facts["wind_speed_kmh"], unit="km/h"))
+    if facts.get("wind_gusts_kmh") is not None:
+        facts_used.append(FactToReport(name="Wind Gusts", value=facts["wind_gusts_kmh"], unit="km/h"))
+    if facts.get("temperature_c") is not None:
+        facts_used.append(FactToReport(name="Temperature", value=facts["temperature_c"], unit="°C"))
+    if facts.get("precipitation_mm") is not None:
+        facts_used.append(FactToReport(name="Precipitation", value=facts["precipitation_mm"], unit="mm"))
+    if facts.get("precipitation_probability") is not None:
+        facts_used.append(FactToReport(name="Rain Probability", value=facts["precipitation_probability"], unit="%"))
+    if facts.get("uv_index") is not None:
+        facts_used.append(FactToReport(name="UV Index", value=facts["uv_index"], unit=""))
+    if facts.get("visibility_km") is not None:
+        facts_used.append(FactToReport(name="Visibility", value=facts["visibility_km"], unit="km"))
+
+    applicable_ids = selected_sop.get("applicable_sop_ids") or [selected_sop.get("sop_id", "")]
+
+    payload = ResponseGenerationPayload(
+        activity=activity,
+        location=location,
+        time_period=time_period,
+        recommendation=state.get("decision_recommendation", "caution"),
+        severity=state.get("decision_severity", "MEDIUM"),
+        selected_sop_id=selected_sop.get("sop_id", "SOP-UNKNOWN"),
+        selected_sop_name=selected_sop.get("name", "Weather Policy"),
+        applicable_sop_ids=applicable_ids,
+        guidance=selected_sop.get("guidance", []),
+        rationale=selected_sop.get("rationale", ""),
+        facts_used=facts_used,
+        decision_trace=state.get("decision_trace", "")
+    )
+
+    response_text = await generate_grounded_response(payload)
+
     return {
         "response_type": "SUCCESS",
-        "response": f"Policy evaluated: {sop_id}. Grounded guidance prepared for {sop_id}."
+        "response": response_text
     }
 
 
