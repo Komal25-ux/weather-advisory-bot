@@ -316,23 +316,5 @@ The live severe-weather evaluation intentionally uses the weather returned by Op
 3. **Temporal Resolution**: Open-Meteo hourly forecasts aggregate over 60-minute increments; sub-hourly micro-bursts are represented via maximum gust metrics.
 4. **Hyper-Local Terrain**: Open-Meteo resolution is typically 1–11 km grid cells; extreme microclimates (e.g. narrow mountain passes) may experience localized variations.
 
----
-
-## 18. Submission Checklist
-
-- [x] Standalone Git repository
-- [x] Real LangGraph `StateGraph` with conditional branching
-- [x] Live Open-Meteo geocoding + forecast integration
-- [x] Configurable SOP policy engine with YAML policies
-- [x] Deterministic safety decision and conflict resolution
-- [x] SOP traceability and weather facts in API response
-- [x] Session-scoped LangGraph memory
-- [x] Gemini structured intent extraction + grounded response generation
-- [x] Model rotation for retryable LLM provider failures
-- [x] Adversarial prompt-injection defenses
-- [x] Failure-safe handling for LLM, location, and weather failures
-- [x] Automated tests and evaluation suite
-- [x] Minimal frontend
-- [x] Public deployment on Render
 
 **Safety principle:** when authoritative live weather data is unavailable, the system does not guess. It reports the failure and stops the weather-based recommendation path.
