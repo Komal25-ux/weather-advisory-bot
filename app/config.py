@@ -1,5 +1,5 @@
 from typing import Literal
-from pydantic import Field
+from pydantic import Field, AliasChoices
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -20,11 +20,18 @@ class Settings(BaseSettings):
     )
     LOG_LEVEL: str = Field(default="INFO", description="Application logging level")
 
-    # LLM Settings
-    LLM_PROVIDER: str = Field(default="openai", description="Configurable LLM provider")
-    LLM_API_KEY: str = Field(default="", description="API key for LLM provider")
-    LLM_MODEL: str = Field(default="gpt-4o-mini", description="LLM model identifier")
-    LLM_BASE_URL: str = Field(default="https://api.openai.com/v1", description="LLM API base URL")
+    # LLM Settings (Defaults to Google Gemini OpenAI-compatible endpoint)
+    LLM_PROVIDER: str = Field(default="gemini", description="Configurable LLM provider: gemini, openai")
+    LLM_API_KEY: str = Field(
+        default="",
+        validation_alias=AliasChoices("LLM_API_KEY", "GEMINI_API_KEY", "OPENAI_API_KEY"),
+        description="API key for LLM provider"
+    )
+    LLM_MODEL: str = Field(default="gemini-3.6-flash", description="LLM model identifier")
+    LLM_BASE_URL: str = Field(
+        default="https://generativelanguage.googleapis.com/v1beta/openai/",
+        description="LLM API base URL"
+    )
     LLM_TIMEOUT_SECONDS: float = Field(default=15.0, description="LLM request timeout in seconds")
 
     # Open-Meteo Settings (No API key needed)

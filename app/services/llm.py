@@ -58,7 +58,13 @@ def _get_llm_runnable(custom_runnable: Optional[Any] = None) -> Any:
     if custom_runnable is not None:
         return custom_runnable
 
-    api_key = settings.LLM_API_KEY or "dummy_key_for_testing"
+    api_key = settings.LLM_API_KEY.strip() if settings.LLM_API_KEY else ""
+    if not api_key:
+        raise LLMServiceError(
+            f"LLM API key is not configured for provider '{settings.LLM_PROVIDER}'. "
+            "Please configure LLM_API_KEY (or GEMINI_API_KEY) in your environment or .env file."
+        )
+
     llm = ChatOpenAI(
         model=settings.LLM_MODEL,
         api_key=api_key,
@@ -236,7 +242,14 @@ async def generate_grounded_response(
         if custom_runnable is not None:
             runnable = custom_runnable
         else:
-            api_key = settings.LLM_API_KEY or "dummy_key_for_testing"
+            api_key = settings.LLM_API_KEY.strip() if settings.LLM_API_KEY else ""
+            if not api_key:
+                logger.warning(
+                    f"LLM API key not configured for provider '{settings.LLM_PROVIDER}'. "
+                    "Employing deterministic advisory fallback."
+                )
+                return format_deterministic_advisory(payload)
+
             runnable = ChatOpenAI(
                 model=settings.LLM_MODEL,
                 api_key=api_key,
