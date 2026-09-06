@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Weather Advisory Support Bot</title>
+  <meta name="description" content="Live weather + policy-grounded outdoor safety advice powered by LangGraph and Open-Meteo">
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <div class="app-container">
+    <!-- Header -->
+    <header class="app-header">
+      <div class="header-titles">
+        <div class="brand-row">
+          <span class="brand-icon">🌤️</span>
+          <h1 class="app-title">Weather Advisory Support Bot</h1>
+        </div>
+        <p class="app-subtitle">Live weather + policy-grounded outdoor safety advice</p>
+      </div>
+      <div class="header-actions">
+        <button id="new-conv-btn" class="btn btn-secondary" title="Start a fresh chat session without prior context">
+          <span class="btn-icon">↺</span> New Conversation
+        </button>
+      </div>
+    </header>
+
+    <!-- Session Info Bar -->
+    <div class="session-bar">
+      <span class="session-label">Session ID:</span>
+      <code id="session-id-display" class="session-id">Initializing...</code>
+      <span class="session-status" id="session-status-badge">Ready</span>
+    </div>
+
+    <!-- Chat Messages Container -->
+    <main class="chat-container" id="chat-messages" role="log" aria-live="polite">
+      <!-- Welcome Message -->
+      <div class="message-group assistant-group">
+        <div class="avatar assistant-avatar">🤖</div>
+        <div class="message-content">
+          <div class="message-bubble assistant-bubble">
+            <p>Welcome! Ask me about planning any outdoor activity (e.g., <em>"Can I cycle in Berlin today?"</em> or <em>"Is it safe to take my toddler to the park in Paris?"</em>). I evaluate live weather conditions against strict, deterministic safety policies.</p>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <!-- Loading Indicator -->
+    <div id="loading-indicator" class="loading-bar hidden" aria-hidden="true">
+      <div class="typing-dots">
+        <span></span>
+        <span></span>
+        <span></span>
+      </div>
+      <span class="loading-text">Fetching live weather & evaluating safety policies...</span>
+    </div>
+
+    <!-- Error Banner -->
+    <div id="error-banner" class="error-banner hidden" role="alert">
+      <span class="error-icon">⚠️</span>
+      <span id="error-message" class="error-text">An error occurred.</span>
+      <button id="error-dismiss" class="error-dismiss" aria-label="Dismiss error">✕</button>
+    </div>
+
+    <!-- Input Footer -->
+    <footer class="input-container">
+      <form id="chat-form" class="chat-form" onsubmit="return false;">
+        <input 
+          type="text" 
+          id="user-input" 
+          class="chat-input" 
+          placeholder="Ask an outdoor safety question (e.g. 'Can I cycle in Berlin today?')..."
+          autocomplete="off"
+          aria-label="User query"
+          required
+        />
+        <button type="submit" id="send-btn" class="btn btn-primary" aria-label="Send query">
+          <span>Send</span>
+          <span class="send-arrow">➔</span>
+        </button>
+      </form>
+    </footer>
+  </div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

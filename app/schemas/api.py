@@ -46,7 +46,11 @@ class ChatResponse(BaseModel):
     sop_name: Optional[str] = None
     severity: Optional[str] = None
     recommendation: Optional[str] = None
+    location: Optional[str] = None
+    time_period: Optional[str] = None
+    applicable_sop_ids: List[str] = Field(default_factory=list)
     weather_facts: Optional[Dict[str, Any]] = None
+    decision_trace: Optional[str] = None
     trace: Optional[TraceResponse] = None
 
 
